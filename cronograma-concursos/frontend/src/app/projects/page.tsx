@@ -2,13 +2,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { Project } from "@/types";
+import { ImportExcelResult, Project } from "@/types";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 export default function ProjectsPage() {
   const qc = useQueryClient();
   const [form, setForm] = useState({ name: "", contact_name: "", description: "" });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -32,12 +33,76 @@ export default function ProjectsPage() {
     },
   });
 
+  const importMut = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await api.post<ImportExcelResult>(
+        "/projects/import-excel",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
+      return res.data;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["summary"] });
+      qc.invalidateQueries({ queryKey: ["priority"] });
+    },
+  });
+
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Proyectos</h1>
-        <p className="text-gray-500 text-sm mt-1">Administra los concursos y sus tareas.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Proyectos</h1>
+          <p className="text-gray-500 text-sm mt-1">Administra los concursos y sus tareas.</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) importMut.mutate(file);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={importMut.isPending}
+            className="bg-white border text-sm px-3 py-2 rounded hover:border-gray-400 disabled:opacity-50"
+          >
+            {importMut.isPending ? "Importando..." : "Importar desde Excel"}
+          </button>
+          {importMut.isSuccess && (
+            <span className="text-xs text-emerald-700">
+              {importMut.data.projects_created} concursos · {importMut.data.tasks_created} tareas
+              {importMut.data.skipped_rows > 0 && ` · ${importMut.data.skipped_rows} omitidas`}
+            </span>
+          )}
+          {importMut.isError && (
+            <span className="text-xs text-red-600">
+              No se pudo importar el archivo.
+            </span>
+          )}
+        </div>
       </div>
+
+      {importMut.isSuccess && importMut.data.errors.length > 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 space-y-1">
+          <p className="font-medium">Advertencias durante la importación:</p>
+          {importMut.data.errors.slice(0, 10).map((err, i) => (
+            <p key={i}>· {err}</p>
+          ))}
+          {importMut.data.errors.length > 10 && (
+            <p>· ...y {importMut.data.errors.length - 10} más.</p>
+          )}
+        </div>
+      )}
 
       <form
         onSubmit={(e) => {

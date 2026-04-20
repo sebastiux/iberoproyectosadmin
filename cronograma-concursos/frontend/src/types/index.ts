@@ -10,7 +10,9 @@ export interface Task {
   complete: boolean;
   responsible: string | null;
   observations: string | null;
-  status: TaskStatus;
+  status: TaskStatus | null;
+  auto_status: boolean;
+  effective_status: TaskStatus;
   order: number;
   created_at: string;
   updated_at: string;
@@ -46,6 +48,18 @@ export interface Goal {
   project_id: number | null;
   achieved: boolean;
   created_at: string;
+}
+
+export interface RecalculateResult {
+  updated: number;
+  total_auto: number;
+}
+
+export interface ImportExcelResult {
+  projects_created: number;
+  tasks_created: number;
+  skipped_rows: number;
+  errors: string[];
 }
 
 export const STATUS_LABELS: Record<TaskStatus, string> = {

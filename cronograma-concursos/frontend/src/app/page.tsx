@@ -1,11 +1,19 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { ProjectSummary, Task, STATUS_COLORS, STATUS_LABELS } from "@/types";
+import {
+  ProjectSummary,
+  Task,
+  RecalculateResult,
+  STATUS_COLORS,
+  STATUS_LABELS,
+} from "@/types";
 import Link from "next/link";
 
 export default function Dashboard() {
+  const qc = useQueryClient();
+
   const { data: summaries = [] } = useQuery<ProjectSummary[]>({
     queryKey: ["summary"],
     queryFn: async () => (await api.get("/projects/summary")).data,
@@ -16,6 +24,17 @@ export default function Dashboard() {
     queryFn: async () => (await api.get("/tasks/priority?limit=8")).data,
   });
 
+  const recalcMut = useMutation({
+    mutationFn: async () =>
+      (await api.post<RecalculateResult>("/tasks/recalculate-status")).data,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["summary"] });
+      qc.invalidateQueries({ queryKey: ["priority"] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["project"] });
+    },
+  });
+
   const totalProjects = summaries.length;
   const totalCompleted = summaries.reduce((a, s) => a + s.completed_tasks, 0);
   const totalDelayed = summaries.reduce((a, s) => a + s.delayed_tasks, 0);
@@ -23,9 +42,28 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Cronograma Base</h1>
-        <p className="text-gray-500 text-sm mt-1">Vista general de todos los concursos.</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Cronograma Base</h1>
+          <p className="text-gray-500 text-sm mt-1">Vista general de todos los concursos.</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={() => recalcMut.mutate()}
+            disabled={recalcMut.isPending}
+            className="bg-white border text-sm px-3 py-2 rounded hover:border-gray-400 disabled:opacity-50"
+          >
+            {recalcMut.isPending ? "Recalculando..." : "Recalcular semáforo"}
+          </button>
+          {recalcMut.isSuccess && (
+            <span className="text-xs text-emerald-700">
+              Actualizadas {recalcMut.data.updated}/{recalcMut.data.total_auto} tareas.
+            </span>
+          )}
+          {recalcMut.isError && (
+            <span className="text-xs text-red-600">No se pudo recalcular.</span>
+          )}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -50,8 +88,8 @@ export default function Dashboard() {
                   {t.responsible ? ` ${t.responsible}` : " Sin responsable"}
                 </p>
               </div>
-              <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[t.status]}`}>
-                {STATUS_LABELS[t.status]}
+              <span className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}>
+                {STATUS_LABELS[t.effective_status]}
               </span>
             </div>
           ))}

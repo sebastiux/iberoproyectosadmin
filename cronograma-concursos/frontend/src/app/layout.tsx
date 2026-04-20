@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import { Navbar } from "@/components/Navbar";
+import { SupportButton } from "@/components/SupportButton";
 
 export const metadata: Metadata = {
   title: "Cronograma Concursos",
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <Navbar />
           <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>
+          <SupportButton />
         </Providers>
       </body>
     </html>

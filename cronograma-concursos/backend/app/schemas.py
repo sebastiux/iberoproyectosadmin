@@ -1,6 +1,6 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, model_validator
 from datetime import date, datetime
-from typing import Optional, List
+from typing import Optional, List, Self
 from .models import TaskStatus
 
 
@@ -12,8 +12,17 @@ class TaskBase(BaseModel):
     complete: bool = False
     responsible: Optional[str] = None
     observations: Optional[str] = None
-    status: TaskStatus = TaskStatus.por_iniciar
+    status: Optional[TaskStatus] = None
+    auto_status: bool = True
     order: int = 0
+
+    @model_validator(mode="after")
+    def _validate_dates(self) -> Self:
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError(
+                "La fecha de fin no puede ser anterior a la fecha de inicio."
+            )
+        return self
 
 
 class TaskCreate(TaskBase):
@@ -29,12 +38,32 @@ class TaskUpdate(BaseModel):
     responsible: Optional[str] = None
     observations: Optional[str] = None
     status: Optional[TaskStatus] = None
+    auto_status: Optional[bool] = None
     order: Optional[int] = None
 
+    @model_validator(mode="after")
+    def _validate_dates(self) -> Self:
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError(
+                "La fecha de fin no puede ser anterior a la fecha de inicio."
+            )
+        return self
 
-class TaskOut(TaskBase):
+
+class TaskOut(BaseModel):
     id: int
     project_id: int
+    name: str
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    duration_days: Optional[int] = None
+    complete: bool
+    responsible: Optional[str] = None
+    observations: Optional[str] = None
+    status: Optional[TaskStatus] = None
+    auto_status: bool
+    effective_status: TaskStatus
+    order: int
     created_at: datetime
     updated_at: datetime
 
@@ -97,3 +126,15 @@ class GoalOut(GoalBase):
     id: int
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
+
+
+class RecalculateResult(BaseModel):
+    updated: int
+    total_auto: int
+
+
+class ImportExcelResult(BaseModel):
+    projects_created: int
+    tasks_created: int
+    skipped_rows: int
+    errors: List[str] = []

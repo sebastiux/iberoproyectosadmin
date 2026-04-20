@@ -14,8 +14,17 @@ def list_tasks(project_id: Optional[int] = Query(None), db: Session = Depends(ge
 
 
 @router.get("/priority", response_model=List[schemas.TaskOut])
-def priority_tasks(limit: int = 10, db: Session = Depends(get_db)):
-    return crud.priority_tasks(db, limit)
+def priority_tasks(
+    limit: int = 10,
+    project_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    return crud.priority_tasks(db, limit=limit, project_id=project_id)
+
+
+@router.post("/recalculate-status", response_model=schemas.RecalculateResult)
+def recalculate_statuses(db: Session = Depends(get_db)):
+    return crud.recalculate_statuses(db)
 
 
 @router.post("/", response_model=schemas.TaskOut, status_code=201)

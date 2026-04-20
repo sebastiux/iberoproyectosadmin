@@ -1,3 +1,4 @@
+from datetime import date
 from sqlalchemy import Column, Integer, String, Date, Boolean, ForeignKey, DateTime, Enum, Text
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -11,6 +12,25 @@ class TaskStatus(str, enum.Enum):
     en_proceso = "en_proceso"
     por_iniciar = "por_iniciar"
     atrasado = "atrasado"
+
+
+def compute_task_status(
+    complete: bool,
+    start_date: date | None,
+    end_date: date | None,
+    today: date | None = None,
+) -> TaskStatus:
+    if today is None:
+        today = date.today()
+    if complete:
+        return TaskStatus.completado
+    if end_date is not None and end_date < today:
+        return TaskStatus.atrasado
+    if start_date is not None and end_date is not None and start_date <= today <= end_date:
+        return TaskStatus.en_proceso
+    if start_date is not None and start_date > today:
+        return TaskStatus.por_iniciar
+    return TaskStatus.por_iniciar
 
 
 class Project(Base):
@@ -36,15 +56,27 @@ class Task(Base):
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
     duration_days = Column(Integer, nullable=True)
-    complete = Column(Boolean, default=False)
+    complete = Column(Boolean, default=False, nullable=False)
     responsible = Column(String(200), nullable=True)
     observations = Column(Text, nullable=True)
-    status = Column(Enum(TaskStatus), default=TaskStatus.por_iniciar, nullable=False)
+    # Manual override. Only consulted when auto_status is False.
+    status = Column(Enum(TaskStatus), nullable=True)
+    auto_status = Column(Boolean, default=True, nullable=False, server_default="1")
     order = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     project = relationship("Project", back_populates="tasks")
+
+    @property
+    def computed_status(self) -> TaskStatus:
+        return compute_task_status(self.complete, self.start_date, self.end_date)
+
+    @property
+    def effective_status(self) -> TaskStatus:
+        if self.auto_status or self.status is None:
+            return self.computed_status
+        return self.status
 
 
 class Goal(Base):

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from typing import List
 
 from .. import crud, schemas
 from ..database import get_db
+from ..excel_import import import_workbook
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -16,6 +17,17 @@ def list_projects(db: Session = Depends(get_db)):
 @router.get("/summary", response_model=List[schemas.ProjectSummary])
 def projects_summary(db: Session = Depends(get_db)):
     return crud.projects_summary(db)
+
+
+@router.post("/import-excel", response_model=schemas.ImportExcelResult)
+async def import_projects_excel(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    if not file.filename or not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(400, "Se requiere un archivo .xlsx")
+    contents = await file.read()
+    return import_workbook(db, contents)
 
 
 @router.get("/{project_id}", response_model=schemas.ProjectOut)

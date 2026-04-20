@@ -1,0 +1,63 @@
+export type TaskStatus = "completado" | "en_proceso" | "por_iniciar" | "atrasado";
+
+export interface Task {
+  id: number;
+  project_id: number;
+  name: string;
+  start_date: string | null;
+  end_date: string | null;
+  duration_days: number | null;
+  complete: boolean;
+  responsible: string | null;
+  observations: string | null;
+  status: TaskStatus;
+  order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Project {
+  id: number;
+  name: string;
+  contact_name: string | null;
+  description: string | null;
+  observations: string | null;
+  created_at: string;
+  updated_at: string;
+  tasks: Task[];
+}
+
+export interface ProjectSummary {
+  id: number;
+  name: string;
+  contact_name: string | null;
+  total_tasks: number;
+  completed_tasks: number;
+  delayed_tasks: number;
+  in_progress_tasks: number;
+  completion_percent: number;
+}
+
+export interface Goal {
+  id: number;
+  title: string;
+  description: string | null;
+  target_date: string | null;
+  project_id: number | null;
+  achieved: boolean;
+  created_at: string;
+}
+
+export const STATUS_LABELS: Record<TaskStatus, string> = {
+  completado: "Completado",
+  en_proceso: "En proceso",
+  por_iniciar: "Por iniciar",
+  atrasado: "Atrasado",
+};
+
+export const STATUS_COLORS: Record<TaskStatus, string> = {
+  completado: "bg-emerald-100 text-emerald-800 border-emerald-300",
+  en_proceso: "bg-green-100 text-green-800 border-green-300",
+  por_iniciar: "bg-amber-100 text-amber-800 border-amber-300",
+  atrasado: "bg-red-100 text-red-800 border-red-300",
+};

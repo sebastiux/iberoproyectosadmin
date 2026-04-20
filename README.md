@@ -6,7 +6,7 @@ a FastAPI backend, a Next.js frontend, and a shared traffic-light model for
 tracking task progress.
 
 - **Backend**: FastAPI + SQLAlchemy + Pydantic v2 (SQLite for local dev,
-  PostgreSQL on Railway).
+  MySQL on Railway via PyMySQL).
 - **Frontend**: Next.js 16 App Router + TypeScript + TailwindCSS + TanStack
   Query + Axios.
 - **Language**: UI in Spanish (es-MX); code, commits, and API schemas in
@@ -89,7 +89,7 @@ alembic upgrade head
 ## Railway deployment
 
 The project is designed to run as two Railway services (backend + frontend)
-sharing a single Railway PostgreSQL plugin.
+sharing a single Railway MySQL plugin.
 
 ### 1. Create a Railway project
 
@@ -98,13 +98,21 @@ repository.
 
 _Screenshot placeholder: Railway new project dialogue._
 
-### 2. Add the PostgreSQL plugin
+### 2. Add the MySQL plugin
 
-From the project dashboard, click **New → Database → PostgreSQL**. Railway
-exposes the connection string as the `DATABASE_URL` environment variable on
-every service in the project.
+From the project dashboard, click **New → Database → MySQL**. The plugin
+exposes a `MYSQL_URL` variable (along with `MYSQLHOST`, `MYSQLUSER`,
+`MYSQLPASSWORD`, `MYSQLDATABASE`, `MYSQLPORT`). The backend reads
+`DATABASE_URL`, so either:
 
-_Screenshot placeholder: Railway PostgreSQL plugin, Variables tab._
+- set `DATABASE_URL` on the backend service to `${{MySQL.MYSQL_URL}}`
+  (Railway reference variable), or
+- paste the connection string directly as `DATABASE_URL`.
+
+The app rewrites `mysql://` to `mysql+pymysql://` automatically so
+SQLAlchemy picks the right driver.
+
+_Screenshot placeholder: Railway MySQL plugin, Variables tab._
 
 ### 3. Deploy the backend service
 
@@ -121,7 +129,7 @@ Required variables:
 
 | Name | Value |
 | --- | --- |
-| `DATABASE_URL` | provided by the Postgres plugin |
+| `DATABASE_URL` | `${{MySQL.MYSQL_URL}}` (Railway reference) |
 | `FRONTEND_ORIGIN` | e.g. `https://cronograma-frontend.up.railway.app` |
 | `ENVIRONMENT` | `production` |
 | `EXTRA_CORS_ORIGINS` | optional, comma-separated |

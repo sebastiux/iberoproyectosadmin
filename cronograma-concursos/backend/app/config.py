@@ -37,9 +37,10 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _normalise_database_url(cls, value: str) -> str:
-        # Railway exposes Postgres as postgres:// which SQLAlchemy 2 rejects.
-        if value.startswith("postgres://"):
-            return value.replace("postgres://", "postgresql://", 1)
+        # Railway's MySQL plugin exposes the URL with the bare "mysql://"
+        # scheme; pin it to PyMySQL so SQLAlchemy picks the right driver.
+        if value.startswith("mysql://"):
+            return value.replace("mysql://", "mysql+pymysql://", 1)
         return value
 
 

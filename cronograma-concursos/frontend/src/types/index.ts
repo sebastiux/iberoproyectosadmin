@@ -70,8 +70,8 @@ export const STATUS_LABELS: Record<TaskStatus, string> = {
 };
 
 export const STATUS_COLORS: Record<TaskStatus, string> = {
-  completado: "bg-emerald-100 text-emerald-800 border-emerald-300",
-  en_proceso: "bg-green-100 text-green-800 border-green-300",
-  por_iniciar: "bg-amber-100 text-amber-800 border-amber-300",
-  atrasado: "bg-red-100 text-red-800 border-red-300",
+  completado: "bg-emerald-50 text-emerald-900 border-emerald-200",
+  en_proceso: "bg-amber-50 text-amber-900 border-amber-200",
+  por_iniciar: "bg-stone-100 text-stone-800 border-stone-300",
+  atrasado: "bg-red-50 text-red-900 border-red-200",
 };

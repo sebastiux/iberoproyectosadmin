@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { Goal, Project } from "@/types";
+import { PlusIcon, TrashIcon } from "@/components/icons";
 import { useState } from "react";
 
 export default function PlanningPage() {
@@ -13,6 +14,7 @@ export default function PlanningPage() {
     target_date: "",
     project_id: "",
   });
+  const [showForm, setShowForm] = useState(true);
 
   const { data: goals = [] } = useQuery<Goal[]>({
     queryKey: ["goals"],
@@ -46,88 +48,109 @@ export default function PlanningPage() {
   });
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-semibold">Punto de Partida</h1>
-        <p className="text-gray-500 text-sm mt-1">
+    <div className="space-y-10">
+      <header>
+        <p className="kicker">Planeación</p>
+        <h1 className="font-serif text-5xl mt-2 tracking-tight">Punto de Partida</h1>
+        <p className="mt-2 text-sm text-muted">
           Proyecciones a futuro y metas definidas por el equipo.
         </p>
-      </div>
+      </header>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!form.title) return;
-          createGoal.mutate();
-        }}
-        className="bg-white border rounded-lg p-4 space-y-3"
-      >
-        <h2 className="font-medium">Nueva meta</h2>
-        <div className="grid md:grid-cols-4 gap-3">
-          <input
-            className="border rounded px-3 py-2 text-sm md:col-span-2"
-            placeholder="Titulo"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-          />
-          <input
-            type="date"
-            className="border rounded px-3 py-2 text-sm"
-            value={form.target_date}
-            onChange={(e) => setForm({ ...form, target_date: e.target.value })}
-          />
-          <select
-            className="border rounded px-3 py-2 text-sm"
-            value={form.project_id}
-            onChange={(e) => setForm({ ...form, project_id: e.target.value })}
-          >
-            <option value="">Sin concurso vinculado</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <textarea
-          className="border rounded px-3 py-2 text-sm w-full"
-          rows={2}
-          placeholder="Descripcion / objetivo"
-          value={form.description}
-          onChange={(e) => setForm({ ...form, description: e.target.value })}
-        />
+      <section className="bg-card border border-border-soft p-6">
         <button
-          type="submit"
-          className="bg-black text-white text-sm px-4 py-2 rounded hover:bg-gray-800"
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-3 text-foreground"
         >
-          Guardar meta
+          <PlusIcon
+            size={18}
+            className={`transition-transform ${showForm ? "rotate-45" : ""}`}
+          />
+          <span className="text-sm font-medium">Nueva meta</span>
         </button>
-      </form>
+        {showForm && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!form.title) return;
+              createGoal.mutate();
+            }}
+            className="mt-5 space-y-4"
+          >
+            <div className="grid md:grid-cols-4 gap-3">
+              <input
+                className="md:col-span-2 border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
+                placeholder="Título"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+              />
+              <input
+                type="date"
+                className="border border-border bg-transparent px-3 py-2.5 text-sm focus:outline-none focus:border-foreground transition-colors"
+                value={form.target_date}
+                onChange={(e) => setForm({ ...form, target_date: e.target.value })}
+              />
+              <select
+                className="border border-border bg-transparent px-3 py-2.5 text-sm focus:outline-none focus:border-foreground transition-colors"
+                value={form.project_id}
+                onChange={(e) => setForm({ ...form, project_id: e.target.value })}
+              >
+                <option value="">Sin concurso vinculado</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <textarea
+              className="border border-border bg-transparent px-3 py-2.5 text-sm w-full placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
+              rows={2}
+              placeholder="Descripción / objetivo"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+            <button
+              type="submit"
+              disabled={createGoal.isPending || !form.title}
+              className="bg-foreground text-background hover:opacity-90 px-5 py-2.5 text-sm transition-opacity disabled:opacity-40"
+            >
+              {createGoal.isPending ? "Guardando..." : "Guardar meta"}
+            </button>
+          </form>
+        )}
+      </section>
 
-      <div className="bg-white border rounded-lg divide-y">
+      <section className="space-y-3">
         {goals.length === 0 && (
-          <p className="p-6 text-sm text-gray-500">Sin metas registradas.</p>
+          <p className="text-sm text-muted">Sin metas registradas.</p>
         )}
         {goals.map((g) => (
-          <div key={g.id} className="p-4 flex items-start justify-between gap-4">
+          <article
+            key={g.id}
+            className="bg-card border border-border-soft p-5 flex items-start justify-between gap-4"
+          >
             <div>
-              <p className="font-medium">{g.title}</p>
+              <h3 className="font-serif text-xl">{g.title}</h3>
               {g.description && (
-                <p className="text-sm text-gray-600 mt-1">{g.description}</p>
+                <p className="mt-2 text-sm text-muted">{g.description}</p>
               )}
-              <p className="text-xs text-gray-500 mt-2">
-                {g.target_date ? `Fecha objetivo: ${g.target_date}` : "Sin fecha"}
+              <p className="mt-2 text-xs text-kicker uppercase tracking-[0.18em]">
+                {g.target_date ? `Fecha objetivo · ${g.target_date}` : "Sin fecha"}
               </p>
             </div>
             <button
+              type="button"
               onClick={() => deleteGoal.mutate(g.id)}
-              className="text-sm text-red-600 hover:underline shrink-0"
+              className="text-muted hover:text-danger transition-colors p-2 shrink-0"
+              aria-label={`Eliminar ${g.title}`}
             >
-              Eliminar
+              <TrashIcon size={16} />
             </button>
-          </div>
+          </article>
         ))}
-      </div>
+      </section>
     </div>
   );
 }

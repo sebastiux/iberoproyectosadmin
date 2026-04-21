@@ -9,6 +9,11 @@ import {
   Task,
   TaskStatus,
 } from "@/types";
+import {
+  ChevronLeftIcon,
+  PlusIcon,
+  TrashIcon,
+} from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useState } from "react";
@@ -39,6 +44,7 @@ export default function ProjectDetailPage() {
   const projectId = Number(params.id);
   const qc = useQueryClient();
   const [form, setForm] = useState<TaskForm>(EMPTY_TASK);
+  const [showForm, setShowForm] = useState(true);
 
   const { data: project, isLoading } = useQuery<Project>({
     queryKey: ["project", projectId],
@@ -82,124 +88,145 @@ export default function ProjectDetailPage() {
   });
 
   if (isLoading) {
-    return <p className="text-sm text-gray-500">Cargando concurso...</p>;
+    return <p className="text-sm text-muted">Cargando concurso...</p>;
   }
   if (!project) {
     return (
-      <div className="space-y-4">
-        <p className="text-sm text-gray-500">Concurso no encontrado.</p>
-        <Link href="/projects" className="text-sm text-blue-600 hover:underline">
+      <div className="space-y-3">
+        <p className="text-sm text-muted">Concurso no encontrado.</p>
+        <Link href="/projects" className="text-sm underline">
           Volver a proyectos
         </Link>
       </div>
     );
   }
 
-  const createError = createTask.error as { response?: { data?: { detail?: unknown } } } | null;
-  const createErrorMsg = extractError(createError);
+  const createErrorMsg = extractError(createTask.error);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Link href="/projects" className="text-xs text-gray-500 hover:underline">
-          ← Proyectos
+    <div className="space-y-10">
+      <header>
+        <Link
+          href="/projects"
+          className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground transition-colors"
+        >
+          <ChevronLeftIcon size={14} />
+          Proyectos
         </Link>
-        <h1 className="text-2xl font-semibold mt-1">{project.name}</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          {project.contact_name || "Sin contacto"} · {project.tasks.length} tareas
+        <p className="kicker mt-4">Concurso</p>
+        <h1 className="font-serif text-5xl mt-2 tracking-tight">{project.name}</h1>
+        <p className="mt-2 text-sm text-muted">
+          {project.contact_name || "Sin contacto"}
+          <span className="mx-2">·</span>
+          {project.tasks.length} {project.tasks.length === 1 ? "tarea" : "tareas"}
         </p>
-      </div>
+      </header>
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!form.name) return;
-          createTask.mutate(form);
-        }}
-        className="bg-white border rounded-lg p-4 space-y-3"
-      >
-        <h2 className="font-medium">Nueva tarea</h2>
-        <div className="grid md:grid-cols-4 gap-3">
-          <input
-            className="border rounded px-3 py-2 text-sm md:col-span-2"
-            placeholder="Nombre de la tarea"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
+      <section className="bg-card border border-border-soft p-6">
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-3 text-foreground"
+        >
+          <PlusIcon
+            size={18}
+            className={`transition-transform ${showForm ? "rotate-45" : ""}`}
           />
-          <input
-            type="date"
-            className="border rounded px-3 py-2 text-sm"
-            value={form.start_date}
-            onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-          />
-          <input
-            type="date"
-            className="border rounded px-3 py-2 text-sm"
-            value={form.end_date}
-            onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-          />
-        </div>
-        <input
-          className="border rounded px-3 py-2 text-sm w-full"
-          placeholder="Responsable"
-          value={form.responsible}
-          onChange={(e) => setForm({ ...form, responsible: e.target.value })}
-        />
-        <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            disabled={createTask.isPending}
-            className="bg-black text-white text-sm px-4 py-2 rounded hover:bg-gray-800 disabled:opacity-50"
+          <span className="text-sm font-medium">Nueva tarea</span>
+        </button>
+        {showForm && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!form.name) return;
+              createTask.mutate(form);
+            }}
+            className="mt-5 space-y-4"
           >
-            {createTask.isPending ? "Guardando..." : "Agregar tarea"}
-          </button>
-          {createErrorMsg && (
-            <span className="text-xs text-red-600">{createErrorMsg}</span>
-          )}
-        </div>
-      </form>
+            <div className="grid md:grid-cols-4 gap-3">
+              <input
+                className="md:col-span-2 border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
+                placeholder="Nombre de la tarea"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+              <input
+                type="date"
+                className="border border-border bg-transparent px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-foreground transition-colors"
+                value={form.start_date}
+                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+              />
+              <input
+                type="date"
+                className="border border-border bg-transparent px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-foreground transition-colors"
+                value={form.end_date}
+                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+              />
+            </div>
+            <input
+              className="border border-border bg-transparent px-3 py-2.5 text-sm w-full placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
+              placeholder="Responsable"
+              value={form.responsible}
+              onChange={(e) => setForm({ ...form, responsible: e.target.value })}
+            />
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={createTask.isPending || !form.name}
+                className="bg-foreground text-background hover:opacity-90 px-5 py-2.5 text-sm transition-opacity disabled:opacity-40"
+              >
+                {createTask.isPending ? "Guardando..." : "Agregar tarea"}
+              </button>
+              {createErrorMsg && (
+                <span className="text-xs text-danger">{createErrorMsg}</span>
+              )}
+            </div>
+          </form>
+        )}
+      </section>
 
-      <div className="bg-white border rounded-lg overflow-hidden">
+      <section className="bg-card border border-border-soft overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-            <tr>
-              <th className="text-left p-3">Tarea</th>
-              <th className="text-left p-3">Inicio</th>
-              <th className="text-left p-3">Fin</th>
-              <th className="text-left p-3">Responsable</th>
-              <th className="text-left p-3">Completo</th>
-              <th className="text-left p-3">Estado</th>
-              <th className="text-left p-3">Override</th>
-              <th className="text-right p-3">Acciones</th>
+          <thead>
+            <tr className="border-b border-border-soft text-[11px] uppercase tracking-[0.18em] text-kicker">
+              <th className="text-left px-5 py-3 font-normal">Tarea</th>
+              <th className="text-left px-5 py-3 font-normal">Inicio</th>
+              <th className="text-left px-5 py-3 font-normal">Fin</th>
+              <th className="text-left px-5 py-3 font-normal">Responsable</th>
+              <th className="text-left px-5 py-3 font-normal">Hecho</th>
+              <th className="text-left px-5 py-3 font-normal">Estado</th>
+              <th className="text-left px-5 py-3 font-normal">Manual</th>
+              <th className="text-right px-5 py-3 font-normal"></th>
             </tr>
           </thead>
-          <tbody className="divide-y">
+          <tbody className="divide-y divide-border-soft">
             {project.tasks.length === 0 && (
               <tr>
-                <td colSpan={8} className="p-6 text-center text-gray-500">
+                <td colSpan={8} className="px-5 py-8 text-center text-muted">
                   Aún no hay tareas en este concurso.
                 </td>
               </tr>
             )}
             {project.tasks.map((t) => (
-              <tr key={t.id}>
-                <td className="p-3">{t.name}</td>
-                <td className="p-3 text-gray-600">{t.start_date ?? "—"}</td>
-                <td className="p-3 text-gray-600">{t.end_date ?? "—"}</td>
-                <td className="p-3 text-gray-600">{t.responsible ?? "—"}</td>
-                <td className="p-3">
+              <tr key={t.id} className="align-middle">
+                <td className="px-5 py-3.5">{t.name}</td>
+                <td className="px-5 py-3.5 text-muted">{t.start_date ?? "—"}</td>
+                <td className="px-5 py-3.5 text-muted">{t.end_date ?? "—"}</td>
+                <td className="px-5 py-3.5 text-muted">{t.responsible ?? "—"}</td>
+                <td className="px-5 py-3.5">
                   <input
                     type="checkbox"
                     checked={t.complete}
                     onChange={(e) =>
                       updateTask.mutate({ id: t.id, patch: { complete: e.target.checked } })
                     }
+                    className="accent-foreground"
                   />
                 </td>
-                <td className="p-3">
+                <td className="px-5 py-3.5">
                   {t.auto_status ? (
                     <span
-                      className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}
+                      className={`text-[11px] px-2.5 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}
                     >
                       {STATUS_LABELS[t.effective_status]}
                     </span>
@@ -215,7 +242,7 @@ export default function ProjectDetailPage() {
                           },
                         })
                       }
-                      className={`text-xs px-2 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}
+                      className={`text-[11px] px-2.5 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}
                     >
                       {STATUS_OPTIONS.map((s) => (
                         <option key={s} value={s}>
@@ -225,8 +252,8 @@ export default function ProjectDetailPage() {
                     </select>
                   )}
                 </td>
-                <td className="p-3">
-                  <label className="inline-flex items-center gap-2 text-xs text-gray-600">
+                <td className="px-5 py-3.5">
+                  <label className="inline-flex items-center gap-2 text-xs text-muted">
                     <input
                       type="checkbox"
                       checked={!t.auto_status}
@@ -241,32 +268,36 @@ export default function ProjectDetailPage() {
                           },
                         })
                       }
+                      className="accent-foreground"
                     />
                     Manual
                   </label>
                 </td>
-                <td className="p-3 text-right">
+                <td className="px-5 py-3.5 text-right">
                   <button
+                    type="button"
                     onClick={() =>
-                      confirm(`Eliminar "${t.name}"?`) && deleteTask.mutate(t.id)
+                      confirm(`¿Eliminar "${t.name}"?`) && deleteTask.mutate(t.id)
                     }
-                    className="text-xs text-red-600 hover:underline"
+                    className="text-muted hover:text-danger transition-colors p-2"
+                    aria-label={`Eliminar ${t.name}`}
                   >
-                    Eliminar
+                    <TrashIcon size={15} />
                   </button>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </div>
+      </section>
     </div>
   );
 }
 
-function extractError(err: { response?: { data?: { detail?: unknown } } } | null): string | null {
+function extractError(err: unknown): string | null {
   if (!err) return null;
-  const detail = err.response?.data?.detail;
+  const anyErr = err as { response?: { data?: { detail?: unknown } } };
+  const detail = anyErr.response?.data?.detail;
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail)) {
     const first = detail[0] as { msg?: string } | undefined;

@@ -3,12 +3,19 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { ImportExcelResult, Project } from "@/types";
+import {
+  ChevronRightIcon,
+  PlusIcon,
+  TrashIcon,
+  UploadIcon,
+} from "@/components/icons";
 import Link from "next/link";
 import { useRef, useState } from "react";
 
 export default function ProjectsPage() {
   const qc = useQueryClient();
   const [form, setForm] = useState({ name: "", contact_name: "", description: "" });
+  const [showForm, setShowForm] = useState(true);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: projects = [] } = useQuery<Project[]>({
@@ -51,14 +58,19 @@ export default function ProjectsPage() {
     },
   });
 
+  const count = projects.length;
+
   return (
-    <div className="space-y-8">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-10">
+      <header className="flex items-end justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-semibold">Proyectos</h1>
-          <p className="text-gray-500 text-sm mt-1">Administra los concursos y sus tareas.</p>
+          <p className="kicker">Administración</p>
+          <h1 className="font-serif text-5xl mt-2 tracking-tight">Proyectos</h1>
+          <p className="mt-2 text-sm text-muted">
+            {count} {count === 1 ? "concurso registrado" : "concursos registrados"}.
+          </p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex flex-col items-end gap-1.5">
           <input
             ref={fileInputRef}
             type="file"
@@ -74,27 +86,26 @@ export default function ProjectsPage() {
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={importMut.isPending}
-            className="bg-white border text-sm px-3 py-2 rounded hover:border-gray-400 disabled:opacity-50"
+            className="flex items-center gap-2 border border-border bg-card hover:border-foreground px-4 py-2.5 text-sm transition-colors disabled:opacity-50"
           >
+            <UploadIcon size={15} />
             {importMut.isPending ? "Importando..." : "Importar desde Excel"}
           </button>
           {importMut.isSuccess && (
-            <span className="text-xs text-emerald-700">
+            <span className="text-xs text-muted">
               {importMut.data.projects_created} concursos · {importMut.data.tasks_created} tareas
               {importMut.data.skipped_rows > 0 && ` · ${importMut.data.skipped_rows} omitidas`}
             </span>
           )}
           {importMut.isError && (
-            <span className="text-xs text-red-600">
-              No se pudo importar el archivo.
-            </span>
+            <span className="text-xs text-danger">No se pudo importar el archivo.</span>
           )}
         </div>
-      </div>
+      </header>
 
       {importMut.isSuccess && importMut.data.errors.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 space-y-1">
-          <p className="font-medium">Advertencias durante la importación:</p>
+        <div className="bg-card border border-border-soft p-4 text-xs text-muted space-y-1">
+          <p className="font-medium text-foreground">Advertencias durante la importación:</p>
           {importMut.data.errors.slice(0, 10).map((err, i) => (
             <p key={i}>· {err}</p>
           ))}
@@ -104,67 +115,108 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (!form.name) return;
-          createMut.mutate(form);
-        }}
-        className="bg-white border rounded-lg p-4 space-y-3"
-      >
-        <h2 className="font-medium">Nuevo concurso</h2>
-        <div className="grid md:grid-cols-3 gap-3">
-          <input
-            className="border rounded px-3 py-2 text-sm"
-            placeholder="Nombre (ej. Huawei Innovation)"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-          <input
-            className="border rounded px-3 py-2 text-sm"
-            placeholder="Contacto"
-            value={form.contact_name}
-            onChange={(e) => setForm({ ...form, contact_name: e.target.value })}
-          />
-          <input
-            className="border rounded px-3 py-2 text-sm"
-            placeholder="Descripcion"
-            value={form.description}
-            onChange={(e) => setForm({ ...form, description: e.target.value })}
-          />
-        </div>
+      <section className="bg-card border border-border-soft p-6">
         <button
-          type="submit"
-          disabled={createMut.isPending}
-          className="bg-black text-white text-sm px-4 py-2 rounded hover:bg-gray-800 disabled:opacity-50"
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="flex items-center gap-3 text-foreground"
         >
-          {createMut.isPending ? "Creando..." : "Crear concurso"}
+          <PlusIcon
+            size={18}
+            className={`transition-transform ${showForm ? "rotate-45" : ""}`}
+          />
+          <span className="text-sm font-medium">Nuevo concurso</span>
         </button>
-      </form>
-
-      <div className="bg-white border rounded-lg divide-y">
-        {projects.length === 0 && (
-          <p className="p-6 text-sm text-gray-500">Sin proyectos todavia.</p>
-        )}
-        {projects.map((p) => (
-          <div key={p.id} className="p-4 flex items-center justify-between gap-4">
-            <div>
-              <Link href={`/projects/${p.id}`} className="font-medium hover:underline">
-                {p.name}
-              </Link>
-              <p className="text-xs text-gray-500 mt-1">
-                {p.contact_name || "Sin contacto"} · {p.tasks.length} tareas
-              </p>
+        {showForm && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!form.name) return;
+              createMut.mutate(form);
+            }}
+            className="mt-5 space-y-4"
+          >
+            <div className="grid md:grid-cols-3 gap-3">
+              <TextInput
+                placeholder="Nombre del concurso"
+                value={form.name}
+                onChange={(v) => setForm({ ...form, name: v })}
+              />
+              <TextInput
+                placeholder="Contacto de la carrera"
+                value={form.contact_name}
+                onChange={(v) => setForm({ ...form, contact_name: v })}
+              />
+              <TextInput
+                placeholder="Descripción breve"
+                value={form.description}
+                onChange={(v) => setForm({ ...form, description: v })}
+              />
             </div>
             <button
-              onClick={() => confirm(`Eliminar "${p.name}"?`) && deleteMut.mutate(p.id)}
-              className="text-sm text-red-600 hover:underline"
+              type="submit"
+              disabled={createMut.isPending || !form.name}
+              className="bg-foreground text-background hover:opacity-90 px-5 py-2.5 text-sm transition-opacity disabled:opacity-40"
             >
-              Eliminar
+              {createMut.isPending ? "Creando..." : "Crear concurso"}
             </button>
-          </div>
+          </form>
+        )}
+      </section>
+
+      <section className="space-y-3">
+        {projects.length === 0 && (
+          <p className="text-sm text-muted">Sin proyectos todavía.</p>
+        )}
+        {projects.map((p) => (
+          <article
+            key={p.id}
+            className="group bg-card border border-border-soft hover:border-border transition-colors p-5 flex items-center gap-4"
+          >
+            <Link href={`/projects/${p.id}`} className="flex-1">
+              <div className="flex items-center gap-2">
+                <h3 className="font-serif text-xl">{p.name}</h3>
+                <ChevronRightIcon
+                  size={18}
+                  className="text-muted group-hover:text-foreground transition-colors"
+                />
+              </div>
+              <p className="mt-1 text-sm text-muted">
+                {p.contact_name || "Sin contacto"}
+                <span className="mx-2">·</span>
+                {p.tasks.length} {p.tasks.length === 1 ? "tarea" : "tareas"}
+              </p>
+            </Link>
+            <button
+              type="button"
+              onClick={() => confirm(`¿Eliminar "${p.name}"?`) && deleteMut.mutate(p.id)}
+              className="text-muted hover:text-danger transition-colors p-2"
+              aria-label={`Eliminar ${p.name}`}
+            >
+              <TrashIcon size={16} />
+            </button>
+          </article>
         ))}
-      </div>
+      </section>
     </div>
+  );
+}
+
+function TextInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      className="border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
+    />
   );
 }

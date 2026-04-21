@@ -6,7 +6,7 @@ from .config import get_settings
 
 settings = get_settings()
 
-SQLALCHEMY_DATABASE_URL = settings.database_url
+SQLALCHEMY_DATABASE_URL = settings.effective_database_url
 
 _engine_kwargs: dict = {"pool_pre_ping": True}
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):

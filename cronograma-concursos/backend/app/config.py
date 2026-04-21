@@ -1,12 +1,22 @@
 from functools import lru_cache
-from typing import List
+from typing import List, Optional
+from urllib.parse import quote_plus
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = Field(default="sqlite:///./cronograma.db")
+    # A full connection URL overrides everything else when present.
+    database_url: Optional[str] = Field(default=None)
+
+    # Individual MySQL parts — matches Railway's MySQL plugin variable names.
+    mysql_host: Optional[str] = Field(default=None, alias="MYSQLHOST")
+    mysql_port: int = Field(default=3306, alias="MYSQLPORT")
+    mysql_user: Optional[str] = Field(default=None, alias="MYSQLUSER")
+    mysql_password: Optional[str] = Field(default=None, alias="MYSQLPASSWORD")
+    mysql_database: Optional[str] = Field(default=None, alias="MYSQLDATABASE")
+
     frontend_origin: str = Field(default="http://localhost:3000")
     # Optional comma-separated extra origins (e.g. a custom domain plus the
     # railway.app preview URL).
@@ -19,6 +29,7 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
+        populate_by_name=True,
     )
 
     @property
@@ -34,12 +45,27 @@ class Settings(BaseSettings):
     def is_production(self) -> bool:
         return self.environment.lower() == "production"
 
+    @property
+    def effective_database_url(self) -> str:
+        """Pick a DB URL in priority order: DATABASE_URL → MYSQL* parts → local SQLite."""
+        if self.database_url:
+            return self.database_url
+        if self.mysql_host and self.mysql_user is not None:
+            user = quote_plus(self.mysql_user)
+            pw = quote_plus(self.mysql_password or "")
+            db = self.mysql_database or ""
+            return (
+                f"mysql+pymysql://{user}:{pw}"
+                f"@{self.mysql_host}:{self.mysql_port}/{db}"
+            )
+        return "sqlite:///./cronograma.db"
+
     @field_validator("database_url")
     @classmethod
-    def _normalise_database_url(cls, value: str) -> str:
+    def _normalise_database_url(cls, value: Optional[str]) -> Optional[str]:
         # Railway's MySQL plugin exposes the URL with the bare "mysql://"
         # scheme; pin it to PyMySQL so SQLAlchemy picks the right driver.
-        if value.startswith("mysql://"):
+        if value and value.startswith("mysql://"):
             return value.replace("mysql://", "mysql+pymysql://", 1)
         return value
 

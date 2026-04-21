@@ -36,8 +36,12 @@ app.add_middleware(
 app.include_router(projects.router)
 app.include_router(tasks.router)
 
+_db_dialect = settings.effective_database_url.split("://", 1)[0]
 logger.info(
-    "app.startup env=%s cors_origins=%s", settings.environment, settings.cors_origins
+    "app.startup env=%s db=%s cors_origins=%s",
+    settings.environment,
+    _db_dialect,
+    settings.cors_origins,
 )
 
 

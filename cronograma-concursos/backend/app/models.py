@@ -62,7 +62,8 @@ class Task(Base):
     # Manual override. Only consulted when auto_status is False.
     status = Column(Enum(TaskStatus), nullable=True)
     auto_status = Column(Boolean, default=True, nullable=False, server_default="1")
-    order = Column(Integer, default=0)
+    # `order` is a reserved word in MySQL; force SQLAlchemy to backtick it.
+    order = Column("order", Integer, default=0, quote=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

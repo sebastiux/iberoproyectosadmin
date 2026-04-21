@@ -18,10 +18,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# In development we keep auto-creating tables for convenience; in production
-# Alembic migrations are the source of truth.
-if not settings.is_production:
+# Ensure tables exist on every boot. `create_all` is a no-op for tables that
+# already exist, so it's safe to run unconditionally and survives fresh
+# databases, restored snapshots, and first deploys.
+try:
     Base.metadata.create_all(bind=engine)
+except Exception:
+    logger.exception("db.create_all failed")
 
 app = FastAPI(title="Cronograma Concursos API", version="0.2.0")
 

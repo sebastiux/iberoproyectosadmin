@@ -6,13 +6,27 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _blank_to_none(value: object) -> Optional[str]:
+    """Treat empty strings as unset.
+
+    Railway substitutes an empty string when a variable reference like
+    ``${{MySQL.MYSQLHOST}}`` fails to resolve, so we normalise those away
+    before they reach the type-checked fields.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str) and value.strip() == "":
+        return None
+    return str(value)
+
+
 class Settings(BaseSettings):
     # A full connection URL overrides everything else when present.
     database_url: Optional[str] = Field(default=None)
 
     # Individual MySQL parts — matches Railway's MySQL plugin variable names.
     mysql_host: Optional[str] = Field(default=None, alias="MYSQLHOST")
-    mysql_port: int = Field(default=3306, alias="MYSQLPORT")
+    mysql_port: Optional[int] = Field(default=3306, alias="MYSQLPORT")
     mysql_user: Optional[str] = Field(default=None, alias="MYSQLUSER")
     mysql_password: Optional[str] = Field(default=None, alias="MYSQLPASSWORD")
     mysql_database: Optional[str] = Field(default=None, alias="MYSQLDATABASE")
@@ -32,6 +46,38 @@ class Settings(BaseSettings):
         populate_by_name=True,
     )
 
+    @field_validator(
+        "database_url",
+        "mysql_host",
+        "mysql_user",
+        "mysql_password",
+        "mysql_database",
+        mode="before",
+    )
+    @classmethod
+    def _coerce_blank_string(cls, value: object) -> Optional[str]:
+        return _blank_to_none(value)
+
+    @field_validator("mysql_port", mode="before")
+    @classmethod
+    def _coerce_port(cls, value: object) -> Optional[int]:
+        cleaned = _blank_to_none(value)
+        if cleaned is None:
+            return None
+        try:
+            return int(cleaned)
+        except (TypeError, ValueError):
+            return None
+
+    @field_validator("database_url")
+    @classmethod
+    def _normalise_database_url(cls, value: Optional[str]) -> Optional[str]:
+        # Railway's MySQL plugin exposes the URL with the bare "mysql://"
+        # scheme; pin it to PyMySQL so SQLAlchemy picks the right driver.
+        if value and value.startswith("mysql://"):
+            return value.replace("mysql://", "mysql+pymysql://", 1)
+        return value
+
     @property
     def cors_origins(self) -> List[str]:
         origins = [self.frontend_origin.strip()]
@@ -50,24 +96,13 @@ class Settings(BaseSettings):
         """Pick a DB URL in priority order: DATABASE_URL → MYSQL* parts → local SQLite."""
         if self.database_url:
             return self.database_url
-        if self.mysql_host and self.mysql_user is not None:
+        if self.mysql_host and self.mysql_user:
             user = quote_plus(self.mysql_user)
             pw = quote_plus(self.mysql_password or "")
             db = self.mysql_database or ""
-            return (
-                f"mysql+pymysql://{user}:{pw}"
-                f"@{self.mysql_host}:{self.mysql_port}/{db}"
-            )
+            port = self.mysql_port or 3306
+            return f"mysql+pymysql://{user}:{pw}@{self.mysql_host}:{port}/{db}"
         return "sqlite:///./cronograma.db"
-
-    @field_validator("database_url")
-    @classmethod
-    def _normalise_database_url(cls, value: Optional[str]) -> Optional[str]:
-        # Railway's MySQL plugin exposes the URL with the bare "mysql://"
-        # scheme; pin it to PyMySQL so SQLAlchemy picks the right driver.
-        if value and value.startswith("mysql://"):
-            return value.replace("mysql://", "mysql+pymysql://", 1)
-        return value
 
 
 @lru_cache

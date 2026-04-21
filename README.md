@@ -86,6 +86,35 @@ alembic revision --autogenerate -m "describe the change"
 alembic upgrade head
 ```
 
+## Sample dataset
+
+A sanitised copy of the team's spreadsheet lives at
+`cronograma-concursos/backend/samples/DataSetSample.xlsx`. Each sheet is one
+concurso; the importer reads:
+
+| Excel column | Maps to |
+| --- | --- |
+| Row 0, col B (title) or `Concurso` column | `Project.name` |
+| `Secuencia / Pasos` | `Task.name` |
+| `Fecha de inicio` / `Fecha de fin` | `Task.start_date` / `Task.end_date` (Excel serials supported) |
+| `Duración (días)` | `Task.duration_days` (auto-derived from dates if empty) |
+| `Completo` (✅ / No) | `Task.complete` |
+| `Responsable` | `Task.responsible` |
+| `Observaciones` | `Task.observations` |
+| `Contacto` metadata row | `Project.contact_name` |
+| `Status` | ignored — derived from dates + `complete` |
+
+To smoke-test the importer locally:
+
+```powershell
+cd cronograma-concursos\backend
+uvicorn app.main:app --reload
+# in another shell:
+curl.exe -F "file=@samples/DataSetSample.xlsx" http://localhost:8000/projects/import-excel
+```
+
+Expected response: `{"projects_created": 28, "tasks_created": ~480, ...}`.
+
 ## Railway deployment
 
 The project is designed to run as two Railway services (backend + frontend)

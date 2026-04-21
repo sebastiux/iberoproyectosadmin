@@ -23,6 +23,8 @@ type TaskForm = {
   start_date: string;
   end_date: string;
   responsible: string;
+  observations: string;
+  complete: boolean;
 };
 
 const EMPTY_TASK: TaskForm = {
@@ -30,6 +32,8 @@ const EMPTY_TASK: TaskForm = {
   start_date: "",
   end_date: "",
   responsible: "",
+  observations: "",
+  complete: false,
 };
 
 const STATUS_OPTIONS: TaskStatus[] = [
@@ -67,6 +71,8 @@ export default function ProjectDetailPage() {
         start_date: payload.start_date || null,
         end_date: payload.end_date || null,
         responsible: payload.responsible || null,
+        observations: payload.observations || null,
+        complete: payload.complete,
       };
       return (await api.post("/tasks/", body)).data;
     },
@@ -75,6 +81,18 @@ export default function ProjectDetailPage() {
       setForm(EMPTY_TASK);
     },
   });
+
+  const derivedDuration =
+    form.start_date && form.end_date
+      ? Math.max(
+          0,
+          Math.round(
+            (new Date(form.end_date).getTime() -
+              new Date(form.start_date).getTime()) /
+              86_400_000,
+          ),
+        )
+      : null;
 
   const updateTask = useMutation({
     mutationFn: async ({ id, patch }: { id: number; patch: Partial<Task> }) =>
@@ -141,34 +159,79 @@ export default function ProjectDetailPage() {
               if (!form.name) return;
               createTask.mutate(form);
             }}
-            className="mt-5 space-y-4"
+            className="mt-5 space-y-5"
           >
-            <div className="grid md:grid-cols-4 gap-3">
+            <Field label="Secuencia / Pasos">
               <input
-                className="md:col-span-2 border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
-                placeholder="Nombre de la tarea"
+                className="w-full border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
+                placeholder="Ej. Alta de concurso en CRM"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
               />
-              <input
-                type="date"
-                className="border border-border bg-transparent px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-foreground transition-colors"
-                value={form.start_date}
-                onChange={(e) => setForm({ ...form, start_date: e.target.value })}
-              />
-              <input
-                type="date"
-                className="border border-border bg-transparent px-3 py-2.5 text-sm text-foreground focus:outline-none focus:border-foreground transition-colors"
-                value={form.end_date}
-                onChange={(e) => setForm({ ...form, end_date: e.target.value })}
-              />
+            </Field>
+
+            <div className="grid md:grid-cols-3 gap-4">
+              <Field label="Fecha de inicio">
+                <input
+                  type="date"
+                  className="w-full border border-border bg-transparent px-3 py-2.5 text-sm focus:outline-none focus:border-foreground transition-colors"
+                  value={form.start_date}
+                  onChange={(e) => setForm({ ...form, start_date: e.target.value })}
+                />
+              </Field>
+              <Field label="Fecha de fin">
+                <input
+                  type="date"
+                  className="w-full border border-border bg-transparent px-3 py-2.5 text-sm focus:outline-none focus:border-foreground transition-colors"
+                  value={form.end_date}
+                  onChange={(e) => setForm({ ...form, end_date: e.target.value })}
+                />
+              </Field>
+              <Field
+                label="Duración (días)"
+                hint={derivedDuration !== null ? "Calculada a partir de las fechas" : "Se calcula al fijar ambas fechas"}
+              >
+                <input
+                  readOnly
+                  value={derivedDuration !== null ? String(derivedDuration) : ""}
+                  placeholder="—"
+                  className="w-full border border-border-soft bg-transparent px-3 py-2.5 text-sm text-muted"
+                />
+              </Field>
             </div>
-            <input
-              className="border border-border bg-transparent px-3 py-2.5 text-sm w-full placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
-              placeholder="Responsable"
-              value={form.responsible}
-              onChange={(e) => setForm({ ...form, responsible: e.target.value })}
-            />
+
+            <div className="grid md:grid-cols-2 gap-4">
+              <Field label="Responsable">
+                <input
+                  className="w-full border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
+                  placeholder="Nombre del responsable"
+                  value={form.responsible}
+                  onChange={(e) => setForm({ ...form, responsible: e.target.value })}
+                />
+              </Field>
+              <Field label="Completo">
+                <label className="inline-flex items-center gap-2 px-3 py-2.5 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={form.complete}
+                    onChange={(e) => setForm({ ...form, complete: e.target.checked })}
+                    className="accent-foreground"
+                  />
+                  Marcar como completada
+                </label>
+              </Field>
+            </div>
+
+            <Field label="Observaciones">
+              <textarea
+                rows={2}
+                className="w-full border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
+                placeholder="Notas, pendientes, tentativo, etc."
+                value={form.observations}
+                onChange={(e) => setForm({ ...form, observations: e.target.value })}
+              />
+            </Field>
+
             <div className="flex items-center gap-3">
               <button
                 type="submit"
@@ -208,10 +271,24 @@ export default function ProjectDetailPage() {
               </tr>
             )}
             {project.tasks.map((t) => (
-              <tr key={t.id} className="align-middle">
-                <td className="px-5 py-3.5">{t.name}</td>
-                <td className="px-5 py-3.5 text-muted">{t.start_date ?? "—"}</td>
-                <td className="px-5 py-3.5 text-muted">{t.end_date ?? "—"}</td>
+              <tr key={t.id} className="align-top">
+                <td className="px-5 py-3.5">
+                  <p>{t.name}</p>
+                  {t.observations && (
+                    <p className="mt-1 text-xs text-muted">{t.observations}</p>
+                  )}
+                </td>
+                <td className="px-5 py-3.5 text-muted whitespace-nowrap">
+                  {t.start_date ?? "—"}
+                </td>
+                <td className="px-5 py-3.5 text-muted whitespace-nowrap">
+                  {t.end_date ?? "—"}
+                  {t.duration_days !== null && (
+                    <span className="block text-[11px] text-kicker">
+                      {t.duration_days} d
+                    </span>
+                  )}
+                </td>
                 <td className="px-5 py-3.5 text-muted">{t.responsible ?? "—"}</td>
                 <td className="px-5 py-3.5">
                   <input
@@ -291,6 +368,24 @@ export default function ProjectDetailPage() {
         </table>
       </section>
     </div>
+  );
+}
+
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="kicker block mb-1.5">{label}</span>
+      {children}
+      {hint && <span className="block mt-1 text-[11px] text-muted">{hint}</span>}
+    </label>
   );
 }
 

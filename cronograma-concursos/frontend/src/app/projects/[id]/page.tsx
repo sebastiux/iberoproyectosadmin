@@ -109,6 +109,12 @@ export default function ProjectDetailPage() {
     onSuccess: invalidate,
   });
 
+  const updateProject = useMutation({
+    mutationFn: async (patch: { name?: string; contact_name?: string | null; description?: string | null }) =>
+      (await api.patch(`/projects/${projectId}`, patch)).data,
+    onSuccess: invalidate,
+  });
+
   if (isLoading) {
     return <p className="text-sm text-muted">Cargando concurso...</p>;
   }
@@ -129,7 +135,7 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="space-y-10">
-      <header>
+      <header className="space-y-3">
         <Link
           href="/projects"
           className="inline-flex items-center gap-1 text-xs text-muted hover:text-foreground transition-colors"
@@ -138,12 +144,39 @@ export default function ProjectDetailPage() {
           Proyectos
         </Link>
         <p className="kicker mt-4">Concurso</p>
-        <h1 className="font-serif text-5xl mt-2 tracking-tight">{project.name}</h1>
-        <p className="mt-2 text-sm text-muted">
-          {project.contact_name || "Sin contacto"}
-          <span className="mx-2">·</span>
-          {project.tasks.length} {project.tasks.length === 1 ? "tarea" : "tareas"}
-        </p>
+        <HeaderEditable
+          value={project.name}
+          onCommit={(v) => v && v !== project.name && updateProject.mutate({ name: v })}
+          className="font-serif text-5xl tracking-tight"
+          placeholder="Nombre del concurso"
+        />
+        <div className="grid md:grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+          <LabeledInline label="Contacto">
+            <HeaderEditable
+              value={project.contact_name ?? ""}
+              onCommit={(v) =>
+                updateProject.mutate({ contact_name: v.trim() === "" ? null : v.trim() })
+              }
+              className="text-foreground"
+              placeholder="Sin contacto"
+            />
+          </LabeledInline>
+          <LabeledInline label="Tareas">
+            <span className="text-muted">
+              {project.tasks.length} {project.tasks.length === 1 ? "tarea" : "tareas"}
+            </span>
+          </LabeledInline>
+          <LabeledInline label="Descripción">
+            <HeaderEditable
+              value={project.description ?? ""}
+              onCommit={(v) =>
+                updateProject.mutate({ description: v.trim() === "" ? null : v.trim() })
+              }
+              className="text-muted"
+              placeholder="Sin descripción"
+            />
+          </LabeledInline>
+        </div>
       </header>
 
       <section className="bg-card border border-border-soft p-6">
@@ -308,11 +341,23 @@ export default function ProjectDetailPage() {
                     value={t.end_date}
                     onCommit={(v) => patchTask(t.id, { end_date: v })}
                   />
-                  {t.duration_days !== null && (
-                    <span className="block text-[11px] text-kicker mt-0.5">
-                      {t.duration_days} d
-                    </span>
-                  )}
+                  <DurationCell
+                    days={t.duration_days}
+                    startDate={t.start_date}
+                    endDate={t.end_date}
+                    onCommit={(newDays) => {
+                      // Editing the duration rewrites the end_date from
+                      // start + N days so dates stay the source of truth.
+                      if (!t.start_date) {
+                        alert("Define primero la fecha de inicio.");
+                        return;
+                      }
+                      const start = new Date(t.start_date + "T00:00:00");
+                      start.setDate(start.getDate() + newDays);
+                      const nextEnd = start.toISOString().slice(0, 10);
+                      patchTask(t.id, { end_date: nextEnd, duration_days: newDays });
+                    }}
+                  />
                 </td>
                 <td className="px-5 py-3.5">
                   <TextCell
@@ -403,6 +448,99 @@ function DateCell({
       onChange={(e) => onCommit(e.target.value || null)}
       className="bg-transparent text-sm text-muted focus:text-foreground focus:outline-none -mx-1 px-1 py-0.5"
     />
+  );
+}
+
+function DurationCell({
+  days,
+  startDate,
+  endDate,
+  onCommit,
+}: {
+  days: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  onCommit: (days: number) => void;
+}) {
+  const [local, setLocal] = useState(days === null ? "" : String(days));
+  useEffect(() => setLocal(days === null ? "" : String(days)), [days]);
+
+  // If both dates exist, we can show something. Otherwise hide the cell.
+  if (!startDate && !endDate && days === null) return null;
+
+  const commit = () => {
+    const parsed = Number(local);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setLocal(days === null ? "" : String(days));
+      return;
+    }
+    if (parsed !== days) onCommit(parsed);
+  };
+
+  return (
+    <div className="flex items-center gap-1 text-[11px] text-kicker mt-0.5">
+      <input
+        type="number"
+        min={0}
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        }}
+        className="w-10 bg-transparent text-right focus:text-foreground focus:outline-none focus:border-b focus:border-foreground -my-0.5"
+      />
+      <span>d</span>
+    </div>
+  );
+}
+
+function HeaderEditable({
+  value,
+  onCommit,
+  className = "",
+  placeholder,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  className?: string;
+  placeholder?: string;
+}) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
+
+  return (
+    <input
+      value={local}
+      placeholder={placeholder}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        if (local !== value) onCommit(local);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") {
+          setLocal(value);
+          (e.target as HTMLInputElement).blur();
+        }
+      }}
+      className={`w-full bg-transparent placeholder:text-muted focus:outline-none focus:border-b focus:border-foreground -mx-0.5 px-0.5 ${className}`}
+    />
+  );
+}
+
+function LabeledInline({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <>
+      <span className="kicker self-center">{label}</span>
+      <div>{children}</div>
+    </>
   );
 }
 

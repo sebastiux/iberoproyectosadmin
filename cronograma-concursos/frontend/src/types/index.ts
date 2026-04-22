@@ -73,5 +73,6 @@ export const STATUS_COLORS: Record<TaskStatus, string> = {
   completado: "bg-emerald-50 text-emerald-900 border-emerald-200",
   en_proceso: "bg-amber-50 text-amber-900 border-amber-200",
   por_iniciar: "bg-stone-100 text-stone-800 border-stone-300",
-  atrasado: "bg-red-50 text-red-900 border-red-200",
+  // Atrasado is the "seal" — keep it visibly louder than the other badges.
+  atrasado: "bg-red-100 text-red-800 border-red-400 font-semibold",
 };

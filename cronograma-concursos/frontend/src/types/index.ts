@@ -62,6 +62,14 @@ export interface ImportExcelResult {
   errors: string[];
 }
 
+export interface WeekGroup {
+  project_id: number;
+  project_name: string;
+  week_start: string;
+  week_end: string;
+  tasks: Task[];
+}
+
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   completado: "Completado",
   en_proceso: "En proceso",

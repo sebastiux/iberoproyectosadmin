@@ -27,6 +27,11 @@ def step_suggestions(db: Session = Depends(get_db)):
     return crud.step_suggestions(db)
 
 
+@router.get("/week", response_model=List[schemas.WeekGroup])
+def tasks_this_week(db: Session = Depends(get_db)):
+    return crud.tasks_pending_this_week(db)
+
+
 @router.post("/recalculate-status", response_model=schemas.RecalculateResult)
 def recalculate_statuses(db: Session = Depends(get_db)):
     return crud.recalculate_statuses(db)

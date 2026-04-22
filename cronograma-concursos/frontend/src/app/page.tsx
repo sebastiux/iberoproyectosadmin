@@ -8,6 +8,7 @@ import {
   STATUS_COLORS,
   STATUS_LABELS,
   Task,
+  WeekGroup,
 } from "@/types";
 import { ChevronRightIcon, RefreshIcon } from "@/components/icons";
 import Link from "next/link";
@@ -25,16 +26,26 @@ export default function Dashboard() {
     queryFn: async () => (await api.get("/tasks/priority?limit=8")).data,
   });
 
+  const { data: weekGroups = [] } = useQuery<WeekGroup[]>({
+    queryKey: ["week"],
+    queryFn: async () => (await api.get("/tasks/week")).data,
+  });
+
   const recalcMut = useMutation({
     mutationFn: async () =>
       (await api.post<RecalculateResult>("/tasks/recalculate-status")).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["summary"] });
       qc.invalidateQueries({ queryKey: ["priority"] });
+      qc.invalidateQueries({ queryKey: ["week"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["project"] });
     },
   });
+
+  const weekRange =
+    weekGroups[0] && `${fmtShort(weekGroups[0].week_start)} – ${fmtShort(weekGroups[0].week_end)}`;
+  const weekTaskCount = weekGroups.reduce((a, g) => a + g.tasks.length, 0);
 
   const totalProjects = summaries.length;
   const totalCompleted = summaries.reduce((a, s) => a + s.completed_tasks, 0);
@@ -105,6 +116,65 @@ export default function Dashboard() {
       </section>
 
       <section className="space-y-4">
+        <div className="flex items-baseline justify-between gap-4">
+          <h2 className="font-serif text-2xl">Pendientes esta semana</h2>
+          {weekRange && (
+            <span className="text-xs text-muted">
+              {weekRange} · {weekTaskCount} {weekTaskCount === 1 ? "tarea" : "tareas"}
+            </span>
+          )}
+        </div>
+        {weekGroups.length === 0 ? (
+          <div className="bg-card border border-border-soft p-6 text-sm text-muted">
+            Ninguna tarea pendiente con fecha de fin esta semana.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {weekGroups.map((g) => (
+              <article
+                key={g.project_id}
+                className="bg-card border border-border-soft p-5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <Link
+                    href={`/projects/${g.project_id}`}
+                    className="font-serif text-xl hover:underline"
+                  >
+                    {g.project_name}
+                  </Link>
+                  <span className="text-xs text-muted">
+                    {g.tasks.length} {g.tasks.length === 1 ? "tarea" : "tareas"}
+                  </span>
+                </div>
+                <ul className="mt-3 divide-y divide-border-soft">
+                  {g.tasks.map((t) => (
+                    <li
+                      key={t.id}
+                      className="py-2.5 flex items-center justify-between gap-3 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate">{t.name}</p>
+                        <p className="text-[11px] text-muted mt-0.5">
+                          Fin: {t.end_date}
+                          <span className="mx-1.5">·</span>
+                          {t.responsible ?? "Sin responsable"}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 text-[11px] px-2 py-0.5 rounded border ${STATUS_COLORS[t.effective_status]}`}
+                      >
+                        {STATUS_LABELS[t.effective_status]}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="space-y-4">
         <h2 className="font-serif text-2xl">Progreso por concurso</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {summaries.map((s) => (
@@ -150,6 +220,16 @@ export default function Dashboard() {
       </section>
     </div>
   );
+}
+
+const MONTHS_ES = [
+  "ene", "feb", "mar", "abr", "may", "jun",
+  "jul", "ago", "sep", "oct", "nov", "dic",
+];
+
+function fmtShort(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d} ${MONTHS_ES[m - 1]}`;
 }
 
 function Metric({

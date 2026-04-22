@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import date, timedelta
 from typing import List, Optional
 
 from sqlalchemy import func
@@ -165,6 +165,41 @@ def delete_task(db: Session, task_id: int):
     db.commit()
     logger.info("task.delete id=%s", task_id)
     return True
+
+
+def tasks_pending_this_week(db: Session) -> List[schemas.WeekGroup]:
+    """Incomplete tasks whose end_date falls within the current ISO week
+    (Mon→Sun), grouped by project and ordered by due date.
+    """
+    today = date.today()
+    start_of_week = today - timedelta(days=today.weekday())  # Monday
+    end_of_week = start_of_week + timedelta(days=6)           # Sunday
+
+    tasks = (
+        db.query(models.Task)
+        .join(models.Project)
+        .filter(models.Task.end_date.isnot(None))
+        .filter(models.Task.end_date >= start_of_week)
+        .filter(models.Task.end_date <= end_of_week)
+        .filter(models.Task.complete.is_(False))
+        .order_by(models.Project.name, models.Task.end_date)
+        .all()
+    )
+
+    groups: dict[int, schemas.WeekGroup] = {}
+    for t in tasks:
+        g = groups.get(t.project_id)
+        if g is None:
+            g = schemas.WeekGroup(
+                project_id=t.project_id,
+                project_name=t.project.name,
+                week_start=start_of_week,
+                week_end=end_of_week,
+                tasks=[],
+            )
+            groups[t.project_id] = g
+        g.tasks.append(schemas.TaskOut.model_validate(t))
+    return list(groups.values())
 
 
 def step_suggestions(db: Session, limit: int = 200) -> List[str]:

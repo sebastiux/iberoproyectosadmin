@@ -138,3 +138,13 @@ class ImportExcelResult(BaseModel):
     tasks_created: int
     skipped_rows: int
     errors: List[str] = []
+
+
+class WeekGroup(BaseModel):
+    project_id: int
+    project_name: str
+    week_start: date
+    week_end: date
+    tasks: List[TaskOut] = []
+
+    model_config = ConfigDict(from_attributes=True)

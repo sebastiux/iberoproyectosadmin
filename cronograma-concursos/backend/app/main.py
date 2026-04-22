@@ -30,17 +30,16 @@ except Exception:
 
 app = FastAPI(title="Cronograma Concursos API", version="0.2.0")
 
-# Allow the configured origin plus any Railway preview subdomain. The regex
-# fallback means we don't have to redeploy every time Railway hands out a new
-# host name (e.g. after renaming the service or adding a staging environment).
+# No auth yet → credentials=False and an open allow_origins. Once auth lands
+# we'll tighten this back to settings.cors_origins + allow_credentials=True.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_origin_regex=r"https://.*\.up\.railway\.app",
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
+    max_age=600,
 )
 
 app.include_router(projects.router)

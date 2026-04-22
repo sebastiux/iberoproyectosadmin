@@ -4,6 +4,8 @@ from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from typing import List
 
 from . import crud, schemas
@@ -30,8 +32,39 @@ except Exception:
 
 app = FastAPI(title="Cronograma Concursos API", version="0.2.0")
 
-# No auth yet → credentials=False and an open allow_origins. Once auth lands
-# we'll tighten this back to settings.cors_origins + allow_credentials=True.
+class ForceCORSHeaders(BaseHTTPMiddleware):
+    """Belt-and-braces: attach permissive CORS headers to every response,
+    including ones that bypass Starlette's CORSMiddleware (e.g. raw
+    exceptions, ASGI-level errors). Safe while we have no auth/cookies."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        if request.method == "OPTIONS":
+            response = Response(status_code=204)
+        else:
+            try:
+                response = await call_next(request)
+            except Exception:
+                logger.exception(
+                    "unhandled_exception_asgi method=%s path=%s",
+                    request.method,
+                    request.url.path,
+                )
+                response = JSONResponse(
+                    status_code=500,
+                    content={"detail": "Error interno del servidor"},
+                )
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, DELETE, OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Max-Age"] = "600"
+        return response
+
+
+# Outer layer: guarantees CORS headers on every response.
+app.add_middleware(ForceCORSHeaders)
+
+# Inner layer: the standard CORSMiddleware still runs first for well-formed
+# requests so preflights get proper method/header negotiation.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

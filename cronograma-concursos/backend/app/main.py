@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -23,21 +24,43 @@ logger = logging.getLogger(__name__)
 # databases, restored snapshots, and first deploys.
 try:
     Base.metadata.create_all(bind=engine)
+    logger.info("db.create_all ok")
 except Exception:
     logger.exception("db.create_all failed")
 
 app = FastAPI(title="Cronograma Concursos API", version="0.2.0")
 
+# Allow the configured origin plus any Railway preview subdomain. The regex
+# fallback means we don't have to redeploy every time Railway hands out a new
+# host name (e.g. after renaming the service or adding a staging environment).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
+    allow_origin_regex=r"https://.*\.up\.railway\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 app.include_router(projects.router)
 app.include_router(tasks.router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Log the full traceback and return a JSON 500 (with CORS headers
+    attached by the middleware layer)."""
+    logger.exception(
+        "unhandled_exception method=%s path=%s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Error interno del servidor", "error": type(exc).__name__},
+    )
+
 
 _db_dialect = settings.effective_database_url.split("://", 1)[0]
 logger.info(

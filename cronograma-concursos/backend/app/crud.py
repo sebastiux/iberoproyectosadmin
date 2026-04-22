@@ -1,7 +1,8 @@
 import logging
 from datetime import date
-from typing import Optional
+from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from . import models, schemas
@@ -164,6 +165,22 @@ def delete_task(db: Session, task_id: int):
     db.commit()
     logger.info("task.delete id=%s", task_id)
     return True
+
+
+def step_suggestions(db: Session, limit: int = 200) -> List[str]:
+    """Distinct task names across the whole workbook, most-used first.
+
+    Used by the task-creation combobox so operators can reuse existing
+    step names (e.g. "Alta de concurso en CRM") instead of retyping.
+    """
+    rows = (
+        db.query(models.Task.name, func.count(models.Task.id).label("n"))
+        .group_by(models.Task.name)
+        .order_by(func.count(models.Task.id).desc(), models.Task.name.asc())
+        .limit(limit)
+        .all()
+    )
+    return [name for name, _ in rows]
 
 
 def recalculate_statuses(db: Session) -> schemas.RecalculateResult:

@@ -9,14 +9,10 @@ import {
   Task,
   TaskStatus,
 } from "@/types";
-import {
-  ChevronLeftIcon,
-  PlusIcon,
-  TrashIcon,
-} from "@/components/icons";
+import { ChevronLeftIcon, PlusIcon, TrashIcon } from "@/components/icons";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type TaskForm = {
   name: string;
@@ -43,6 +39,8 @@ const STATUS_OPTIONS: TaskStatus[] = [
   "completado",
 ];
 
+type EstadoSelection = "auto" | TaskStatus;
+
 export default function ProjectDetailPage() {
   const params = useParams<{ id: string }>();
   const projectId = Number(params.id);
@@ -56,11 +54,17 @@ export default function ProjectDetailPage() {
     enabled: Number.isFinite(projectId),
   });
 
+  const { data: stepSuggestions = [] } = useQuery<string[]>({
+    queryKey: ["step-suggestions"],
+    queryFn: async () => (await api.get("/tasks/step-suggestions")).data,
+  });
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["project", projectId] });
     qc.invalidateQueries({ queryKey: ["projects"] });
     qc.invalidateQueries({ queryKey: ["summary"] });
     qc.invalidateQueries({ queryKey: ["priority"] });
+    qc.invalidateQueries({ queryKey: ["step-suggestions"] });
   };
 
   const createTask = useMutation({
@@ -120,6 +124,8 @@ export default function ProjectDetailPage() {
   }
 
   const createErrorMsg = extractError(createTask.error);
+  const patchTask = (id: number, patch: Partial<Task>) =>
+    updateTask.mutate({ id, patch });
 
   return (
     <div className="space-y-10">
@@ -161,13 +167,23 @@ export default function ProjectDetailPage() {
             }}
             className="mt-5 space-y-5"
           >
-            <Field label="Secuencia / Pasos">
+            <Field
+              label="Secuencia / Pasos"
+              hint="Empieza a escribir para ver pasos usados en otros concursos."
+            >
               <input
+                list="step-suggestions"
                 className="w-full border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
                 placeholder="Ej. Alta de concurso en CRM"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                autoComplete="off"
               />
+              <datalist id="step-suggestions">
+                {stepSuggestions.map((s) => (
+                  <option key={s} value={s} />
+                ))}
+              </datalist>
             </Field>
 
             <div className="grid md:grid-cols-3 gap-4">
@@ -189,7 +205,11 @@ export default function ProjectDetailPage() {
               </Field>
               <Field
                 label="Duración (días)"
-                hint={derivedDuration !== null ? "Calculada a partir de las fechas" : "Se calcula al fijar ambas fechas"}
+                hint={
+                  derivedDuration !== null
+                    ? "Calculada a partir de las fechas"
+                    : "Se calcula al fijar ambas fechas"
+                }
               >
                 <input
                   readOnly
@@ -258,14 +278,13 @@ export default function ProjectDetailPage() {
               <th className="text-left px-5 py-3 font-normal">Responsable</th>
               <th className="text-left px-5 py-3 font-normal">Hecho</th>
               <th className="text-left px-5 py-3 font-normal">Estado</th>
-              <th className="text-left px-5 py-3 font-normal">Manual</th>
               <th className="text-right px-5 py-3 font-normal"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-soft">
             {project.tasks.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-5 py-8 text-center text-muted">
+                <td colSpan={7} className="px-5 py-8 text-center text-muted">
                   Aún no hay tareas en este concurso.
                 </td>
               </tr>
@@ -278,77 +297,42 @@ export default function ProjectDetailPage() {
                     <p className="mt-1 text-xs text-muted">{t.observations}</p>
                   )}
                 </td>
-                <td className="px-5 py-3.5 text-muted whitespace-nowrap">
-                  {t.start_date ?? "—"}
+                <td className="px-5 py-3.5 whitespace-nowrap">
+                  <DateCell
+                    value={t.start_date}
+                    onCommit={(v) => patchTask(t.id, { start_date: v })}
+                  />
                 </td>
-                <td className="px-5 py-3.5 text-muted whitespace-nowrap">
-                  {t.end_date ?? "—"}
+                <td className="px-5 py-3.5 whitespace-nowrap">
+                  <DateCell
+                    value={t.end_date}
+                    onCommit={(v) => patchTask(t.id, { end_date: v })}
+                  />
                   {t.duration_days !== null && (
-                    <span className="block text-[11px] text-kicker">
+                    <span className="block text-[11px] text-kicker mt-0.5">
                       {t.duration_days} d
                     </span>
                   )}
                 </td>
-                <td className="px-5 py-3.5 text-muted">{t.responsible ?? "—"}</td>
+                <td className="px-5 py-3.5">
+                  <TextCell
+                    value={t.responsible}
+                    placeholder="—"
+                    onCommit={(v) => patchTask(t.id, { responsible: v })}
+                  />
+                </td>
                 <td className="px-5 py-3.5">
                   <input
                     type="checkbox"
                     checked={t.complete}
                     onChange={(e) =>
-                      updateTask.mutate({ id: t.id, patch: { complete: e.target.checked } })
+                      patchTask(t.id, { complete: e.target.checked })
                     }
                     className="accent-foreground"
                   />
                 </td>
                 <td className="px-5 py-3.5">
-                  {t.auto_status ? (
-                    <span
-                      className={`text-[11px] px-2.5 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}
-                    >
-                      {STATUS_LABELS[t.effective_status]}
-                    </span>
-                  ) : (
-                    <select
-                      value={t.status ?? t.effective_status}
-                      onChange={(e) =>
-                        updateTask.mutate({
-                          id: t.id,
-                          patch: {
-                            status: e.target.value as TaskStatus,
-                            auto_status: false,
-                          },
-                        })
-                      }
-                      className={`text-[11px] px-2.5 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}
-                    >
-                      {STATUS_OPTIONS.map((s) => (
-                        <option key={s} value={s}>
-                          {STATUS_LABELS[s]}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </td>
-                <td className="px-5 py-3.5">
-                  <label className="inline-flex items-center gap-2 text-xs text-muted">
-                    <input
-                      type="checkbox"
-                      checked={!t.auto_status}
-                      onChange={(e) =>
-                        updateTask.mutate({
-                          id: t.id,
-                          patch: {
-                            auto_status: !e.target.checked,
-                            ...(e.target.checked
-                              ? { status: t.effective_status }
-                              : { status: null }),
-                          },
-                        })
-                      }
-                      className="accent-foreground"
-                    />
-                    Manual
-                  </label>
+                  <EstadoSelect task={t} onChange={(patch) => patchTask(t.id, patch)} />
                 </td>
                 <td className="px-5 py-3.5 text-right">
                   <button
@@ -368,6 +352,93 @@ export default function ProjectDetailPage() {
         </table>
       </section>
     </div>
+  );
+}
+
+/* ------------------------------- inline cells ------------------------------ */
+
+function TextCell({
+  value,
+  placeholder,
+  onCommit,
+}: {
+  value: string | null;
+  placeholder?: string;
+  onCommit: (v: string | null) => void;
+}) {
+  const [local, setLocal] = useState(value ?? "");
+  useEffect(() => setLocal(value ?? ""), [value]);
+
+  const commit = () => {
+    const next = local.trim() === "" ? null : local.trim();
+    const current = value ?? null;
+    if (next !== current) onCommit(next);
+  };
+
+  return (
+    <input
+      value={local}
+      placeholder={placeholder}
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+      }}
+      className="w-full bg-transparent text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-b focus:border-foreground -mx-1 px-1 py-0.5 rounded-sm"
+    />
+  );
+}
+
+function DateCell({
+  value,
+  onCommit,
+}: {
+  value: string | null;
+  onCommit: (v: string | null) => void;
+}) {
+  return (
+    <input
+      type="date"
+      value={value ?? ""}
+      onChange={(e) => onCommit(e.target.value || null)}
+      className="bg-transparent text-sm text-muted focus:text-foreground focus:outline-none -mx-1 px-1 py-0.5"
+    />
+  );
+}
+
+function EstadoSelect({
+  task,
+  onChange,
+}: {
+  task: Task;
+  onChange: (patch: Partial<Task>) => void;
+}) {
+  const selectValue: EstadoSelection = task.auto_status ? "auto" : task.status ?? task.effective_status;
+
+  const handle = (next: EstadoSelection) => {
+    if (next === "auto") {
+      onChange({ status: null, auto_status: true });
+    } else {
+      onChange({ status: next, auto_status: false });
+    }
+  };
+
+  return (
+    <select
+      value={selectValue}
+      onChange={(e) => handle(e.target.value as EstadoSelection)}
+      className={`text-[11px] px-2.5 py-1 rounded border cursor-pointer ${STATUS_COLORS[task.effective_status]}`}
+      title={task.auto_status ? "Calculado desde las fechas" : "Fijado manualmente"}
+    >
+      <option value="auto">
+        Auto · {STATUS_LABELS[task.effective_status]}
+      </option>
+      {STATUS_OPTIONS.map((s) => (
+        <option key={s} value={s}>
+          {STATUS_LABELS[s]}
+        </option>
+      ))}
+    </select>
   );
 }
 

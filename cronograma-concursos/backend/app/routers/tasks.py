@@ -22,6 +22,11 @@ def priority_tasks(
     return crud.priority_tasks(db, limit=limit, project_id=project_id)
 
 
+@router.get("/step-suggestions", response_model=List[str])
+def step_suggestions(db: Session = Depends(get_db)):
+    return crud.step_suggestions(db)
+
+
 @router.post("/recalculate-status", response_model=schemas.RecalculateResult)
 def recalculate_statuses(db: Session = Depends(get_db)):
     return crud.recalculate_statuses(db)

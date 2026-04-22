@@ -59,12 +59,18 @@ export default function ProjectDetailPage() {
     queryFn: async () => (await api.get("/tasks/step-suggestions")).data,
   });
 
+  const { data: responsibleSuggestions = [] } = useQuery<string[]>({
+    queryKey: ["responsible-suggestions"],
+    queryFn: async () => (await api.get("/tasks/responsible-suggestions")).data,
+  });
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["project", projectId] });
     qc.invalidateQueries({ queryKey: ["projects"] });
     qc.invalidateQueries({ queryKey: ["summary"] });
     qc.invalidateQueries({ queryKey: ["priority"] });
     qc.invalidateQueries({ queryKey: ["step-suggestions"] });
+    qc.invalidateQueries({ queryKey: ["responsible-suggestions"] });
   };
 
   const createTask = useMutation({
@@ -135,6 +141,19 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="space-y-10">
+      {/* Hoisted so inline table cells can use them even when the new-task
+          form is collapsed. */}
+      <datalist id="step-suggestions">
+        {stepSuggestions.map((s) => (
+          <option key={s} value={s} />
+        ))}
+      </datalist>
+      <datalist id="responsible-suggestions">
+        {responsibleSuggestions.map((r) => (
+          <option key={r} value={r} />
+        ))}
+      </datalist>
+
       <header className="space-y-3">
         <Link
           href="/projects"
@@ -212,11 +231,6 @@ export default function ProjectDetailPage() {
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 autoComplete="off"
               />
-              <datalist id="step-suggestions">
-                {stepSuggestions.map((s) => (
-                  <option key={s} value={s} />
-                ))}
-              </datalist>
             </Field>
 
             <div className="grid md:grid-cols-3 gap-4">
@@ -254,12 +268,17 @@ export default function ProjectDetailPage() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-              <Field label="Responsable">
+              <Field
+                label="Responsable"
+                hint="Empieza a escribir para reutilizar responsables existentes."
+              >
                 <input
+                  list="responsible-suggestions"
                   className="w-full border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
                   placeholder="Nombre del responsable"
                   value={form.responsible}
                   onChange={(e) => setForm({ ...form, responsible: e.target.value })}
+                  autoComplete="off"
                 />
               </Field>
               <Field label="Completo">
@@ -363,6 +382,7 @@ export default function ProjectDetailPage() {
                   <TextCell
                     value={t.responsible}
                     placeholder="—"
+                    list="responsible-suggestions"
                     onCommit={(v) => patchTask(t.id, { responsible: v })}
                   />
                 </td>
@@ -405,10 +425,12 @@ export default function ProjectDetailPage() {
 function TextCell({
   value,
   placeholder,
+  list,
   onCommit,
 }: {
   value: string | null;
   placeholder?: string;
+  list?: string;
   onCommit: (v: string | null) => void;
 }) {
   const [local, setLocal] = useState(value ?? "");
@@ -424,11 +446,13 @@ function TextCell({
     <input
       value={local}
       placeholder={placeholder}
+      list={list}
       onChange={(e) => setLocal(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {
         if (e.key === "Enter") (e.target as HTMLInputElement).blur();
       }}
+      autoComplete="off"
       className="w-full bg-transparent text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-b focus:border-foreground -mx-1 px-1 py-0.5 rounded-sm"
     />
   );

@@ -218,6 +218,20 @@ def step_suggestions(db: Session, limit: int = 200) -> List[str]:
     return [name for name, _ in rows]
 
 
+def responsible_suggestions(db: Session, limit: int = 200) -> List[str]:
+    """Distinct responsable names already used on tasks, most-used first."""
+    rows = (
+        db.query(models.Task.responsible, func.count(models.Task.id).label("n"))
+        .filter(models.Task.responsible.isnot(None))
+        .filter(models.Task.responsible != "")
+        .group_by(models.Task.responsible)
+        .order_by(func.count(models.Task.id).desc(), models.Task.responsible.asc())
+        .limit(limit)
+        .all()
+    )
+    return [name for name, _ in rows if name]
+
+
 def recalculate_statuses(db: Session) -> schemas.RecalculateResult:
     """Persist the computed status for every task with auto_status=True."""
     tasks = db.query(models.Task).filter(models.Task.auto_status.is_(True)).all()

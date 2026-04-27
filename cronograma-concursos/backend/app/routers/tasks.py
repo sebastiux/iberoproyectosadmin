@@ -1,3 +1,4 @@
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -35,6 +36,22 @@ def responsible_suggestions(db: Session = Depends(get_db)):
 @router.get("/week", response_model=List[schemas.WeekGroup])
 def tasks_this_week(db: Session = Depends(get_db)):
     return crud.tasks_pending_this_week(db)
+
+
+@router.get("/weekly-plan", response_model=schemas.WeeklyPlan)
+def weekly_plan(
+    week_start: Optional[date] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    return crud.weekly_plan(db, week_start)
+
+
+@router.post("/weekly-plan/generate", response_model=schemas.WeeklyPlanGenerated)
+def generate_weekly_plan(
+    week_start: Optional[date] = Query(default=None),
+    db: Session = Depends(get_db),
+):
+    return crud.generate_weekly_plan(db, week_start)
 
 
 @router.post("/recalculate-status", response_model=schemas.RecalculateResult)

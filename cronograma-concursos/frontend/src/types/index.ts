@@ -70,6 +70,25 @@ export interface WeekGroup {
   tasks: Task[];
 }
 
+export interface WeeklyPlanDay {
+  date: string;
+  tasks: Task[];
+}
+
+export interface WeeklyPlan {
+  week_start: string;
+  week_end: string;
+  days: WeeklyPlanDay[];
+  unscheduled: Task[];
+}
+
+export interface WeeklyPlanGenerated {
+  week_start: string;
+  week_end: string;
+  assigned: number;
+  plan: WeeklyPlan;
+}
+
 export const STATUS_LABELS: Record<TaskStatus, string> = {
   completado: "Completado",
   en_proceso: "En proceso",

@@ -202,6 +202,104 @@ def tasks_pending_this_week(db: Session) -> List[schemas.WeekGroup]:
     return list(groups.values())
 
 
+def _resolve_week_start(week_start: Optional[date]) -> date:
+    today = date.today()
+    if week_start is None:
+        return today - timedelta(days=today.weekday())
+    return week_start - timedelta(days=week_start.weekday())
+
+
+def weekly_plan(db: Session, week_start: Optional[date] = None) -> schemas.WeeklyPlan:
+    """Group every incomplete task with end_date in the given week (Mon→Sun)
+    by date. Also surfaces incomplete tasks without an end_date as
+    `unscheduled`, so the UI can offer to slot them in.
+    """
+    monday = _resolve_week_start(week_start)
+    sunday = monday + timedelta(days=6)
+
+    scheduled = (
+        db.query(models.Task)
+        .filter(models.Task.complete.is_(False))
+        .filter(models.Task.end_date.isnot(None))
+        .filter(models.Task.end_date >= monday)
+        .filter(models.Task.end_date <= sunday)
+        .order_by(models.Task.end_date, models.Task.project_id, models.Task.order)
+        .all()
+    )
+
+    by_day: dict[date, list[models.Task]] = {monday + timedelta(days=i): [] for i in range(7)}
+    for t in scheduled:
+        by_day[t.end_date].append(t)
+
+    unscheduled = (
+        db.query(models.Task)
+        .filter(models.Task.complete.is_(False))
+        .filter(models.Task.end_date.is_(None))
+        .order_by(models.Task.project_id, models.Task.order)
+        .all()
+    )
+
+    return schemas.WeeklyPlan(
+        week_start=monday,
+        week_end=sunday,
+        days=[
+            schemas.WeeklyPlanDay(
+                date=d,
+                tasks=[schemas.TaskOut.model_validate(t) for t in tasks],
+            )
+            for d, tasks in by_day.items()
+        ],
+        unscheduled=[schemas.TaskOut.model_validate(t) for t in unscheduled],
+    )
+
+
+def generate_weekly_plan(
+    db: Session, week_start: Optional[date] = None
+) -> schemas.WeeklyPlanGenerated:
+    """Distribute every incomplete task that lacks an end_date across the
+    weekdays (Mon→Fri) of the given week.
+
+    Strategy: round-robin per project so a single project doesn't stack
+    five tasks on the same day. Day order Mon, Tue, Wed, Thu, Fri.
+    Also stamps start_date if missing so the dashboard's status logic
+    treats them as "in progress" instead of "por iniciar".
+    """
+    monday = _resolve_week_start(week_start)
+    weekdays = [monday + timedelta(days=i) for i in range(5)]
+
+    undated = (
+        db.query(models.Task)
+        .filter(models.Task.complete.is_(False))
+        .filter(models.Task.end_date.is_(None))
+        .order_by(models.Task.project_id, models.Task.order, models.Task.id)
+        .all()
+    )
+
+    cursor: dict[int, int] = {}
+    assigned = 0
+    for t in undated:
+        offset = cursor.get(t.project_id, 0)
+        target_day = weekdays[offset % len(weekdays)]
+        cursor[t.project_id] = offset + 1
+        t.end_date = target_day
+        if not t.start_date:
+            t.start_date = target_day
+        if t.duration_days is None and t.start_date and t.end_date:
+            t.duration_days = (t.end_date - t.start_date).days
+        assigned += 1
+
+    if assigned:
+        db.commit()
+        logger.info("weekly_plan.generate week=%s assigned=%s", monday, assigned)
+
+    return schemas.WeeklyPlanGenerated(
+        week_start=monday,
+        week_end=monday + timedelta(days=6),
+        assigned=assigned,
+        plan=weekly_plan(db, monday),
+    )
+
+
 def step_suggestions(db: Session, limit: int = 200) -> List[str]:
     """Distinct task names across the whole workbook, most-used first.
 

@@ -148,3 +148,22 @@ class WeekGroup(BaseModel):
     tasks: List[TaskOut] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class WeeklyPlanDay(BaseModel):
+    date: date
+    tasks: List[TaskOut] = []
+
+
+class WeeklyPlan(BaseModel):
+    week_start: date
+    week_end: date
+    days: List[WeeklyPlanDay]
+    unscheduled: List[TaskOut] = []
+
+
+class WeeklyPlanGenerated(BaseModel):
+    week_start: date
+    week_end: date
+    assigned: int
+    plan: WeeklyPlan

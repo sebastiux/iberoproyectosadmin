@@ -11,6 +11,7 @@ import {
   WeekGroup,
 } from "@/types";
 import { ChevronRightIcon, RefreshIcon } from "@/components/icons";
+import { WeeklyPlanSection } from "@/components/WeeklyPlanSection";
 import Link from "next/link";
 
 export default function Dashboard() {
@@ -38,6 +39,7 @@ export default function Dashboard() {
       qc.invalidateQueries({ queryKey: ["summary"] });
       qc.invalidateQueries({ queryKey: ["priority"] });
       qc.invalidateQueries({ queryKey: ["week"] });
+      qc.invalidateQueries({ queryKey: ["weekly-plan"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["project"] });
     },
@@ -173,6 +175,8 @@ export default function Dashboard() {
           </div>
         )}
       </section>
+
+      <WeeklyPlanSection />
 
       <section className="space-y-4">
         <h2 className="font-serif text-2xl">Progreso por concurso</h2>

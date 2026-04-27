@@ -7,7 +7,6 @@ import { useEffect, useState } from "react";
 const links = [
   { href: "/", label: "Cronograma Base" },
   { href: "/projects", label: "Proyectos" },
-  { href: "/planning", label: "Punto de Partida" },
 ];
 
 // Until auth ships, we surface a single operator name. Swap this for the

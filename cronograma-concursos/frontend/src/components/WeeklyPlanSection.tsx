@@ -199,6 +199,7 @@ export function WeeklyPlanSection() {
               <PlanTaskRow
                 key={t.id}
                 task={t}
+                projectName={projectNames.get(t.project_id) ?? null}
                 days={dayOptions}
                 onMove={(date) => moveTask.mutate({ id: t.id, end_date: date })}
               />

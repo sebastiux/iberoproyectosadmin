@@ -50,6 +50,12 @@ export default function Dashboard() {
   const totalDelayed = summaries.reduce((a, s) => a + s.delayed_tasks, 0);
   const totalInProgress = summaries.reduce((a, s) => a + s.in_progress_tasks, 0);
 
+  const projectNames = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const s of summaries) m.set(s.id, s.name);
+    return m;
+  }, [summaries]);
+
   // Sort: atrasadas first, then by least-progressed, so the monitor surfaces
   // the concursos that need attention up top.
   const ordered = useMemo(() => {
@@ -109,23 +115,36 @@ export default function Dashboard() {
           {priority.length === 0 && (
             <p className="p-6 text-sm text-muted">Sin tareas pendientes.</p>
           )}
-          {priority.map((t) => (
-            <div key={t.id} className="p-5 flex items-center justify-between gap-4">
-              <div>
-                <p className="font-medium text-foreground">{t.name}</p>
-                <p className="text-xs text-muted mt-1">
-                  {t.end_date ? `Fin: ${t.end_date}` : "Sin fecha"}
-                  <span className="mx-2">·</span>
-                  {t.responsible ?? "Sin responsable"}
-                </p>
-              </div>
-              <span
-                className={`text-[11px] px-2.5 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}
+          {priority.map((t) => {
+            const project = projectNames.get(t.project_id);
+            return (
+              <div
+                key={t.id}
+                className="p-5 flex items-center justify-between gap-4"
               >
-                {STATUS_LABELS[t.effective_status]}
-              </span>
-            </div>
-          ))}
+                <div className="min-w-0">
+                  <p className="font-medium text-foreground truncate">{t.name}</p>
+                  <p className="text-xs text-muted mt-1 truncate">
+                    <Link
+                      href={`/projects/${t.project_id}`}
+                      className="hover:underline text-foreground"
+                    >
+                      {project ?? `Concurso #${t.project_id}`}
+                    </Link>
+                    <span className="mx-2">·</span>
+                    {t.end_date ? `Fin: ${t.end_date}` : "Sin fecha"}
+                    <span className="mx-2">·</span>
+                    {t.responsible ?? "Sin responsable"}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 text-[11px] px-2.5 py-1 rounded border ${STATUS_COLORS[t.effective_status]}`}
+                >
+                  {STATUS_LABELS[t.effective_status]}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </section>
 

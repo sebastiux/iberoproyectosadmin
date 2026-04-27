@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import {
+  ProjectSummary,
   STATUS_COLORS,
   STATUS_LABELS,
   Task,
@@ -53,6 +54,18 @@ export function WeeklyPlanSection() {
     queryFn: async () =>
       (await api.get(`/tasks/weekly-plan?week_start=${weekStart}`)).data,
   });
+
+  // Cached alongside the rest of the dashboard — used to label each task
+  // with its concurso name without changing the backend payload.
+  const { data: summaries = [] } = useQuery<ProjectSummary[]>({
+    queryKey: ["summary"],
+    queryFn: async () => (await api.get("/projects/summary")).data,
+  });
+  const projectNames = useMemo(() => {
+    const m = new Map<number, string>();
+    for (const s of summaries) m.set(s.id, s.name);
+    return m;
+  }, [summaries]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["weekly-plan"] });
@@ -163,6 +176,7 @@ export function WeeklyPlanSection() {
                       <PlanTaskRow
                         key={t.id}
                         task={t}
+                        projectName={projectNames.get(t.project_id) ?? null}
                         days={dayOptions}
                         onMove={(date) => moveTask.mutate({ id: t.id, end_date: date })}
                       />
@@ -204,23 +218,27 @@ export function WeeklyPlanSection() {
 
 function PlanTaskRow({
   task,
+  projectName,
   days,
   onMove,
 }: {
   task: Task;
+  projectName: string | null;
   days: { value: string; label: string }[];
   onMove: (date: string) => void;
 }) {
   return (
     <li className="flex items-center justify-between gap-3 text-sm">
       <div className="min-w-0 flex-1">
-        <Link
-          href={`/projects/${task.project_id}`}
-          className="font-medium hover:underline truncate block"
-        >
-          {task.name}
-        </Link>
+        <p className="font-medium truncate">{task.name}</p>
         <p className="text-[11px] text-muted mt-0.5 truncate">
+          <Link
+            href={`/projects/${task.project_id}`}
+            className="hover:underline text-foreground"
+          >
+            {projectName ?? `Concurso #${task.project_id}`}
+          </Link>
+          <span className="mx-1.5">·</span>
           {task.responsible ?? "Sin responsable"}
         </p>
       </div>

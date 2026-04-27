@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from datetime import date, datetime
 from typing import Optional, List, Self
 from .models import TaskStatus
@@ -116,6 +116,15 @@ class GoalBase(BaseModel):
     target_date: Optional[date] = None
     project_id: Optional[int] = None
     achieved: bool = False
+
+    @field_validator("achieved", mode="before")
+    @classmethod
+    def _coerce_achieved(cls, value: object) -> bool:
+        # MySQL columns created before nullable=False existed can hold
+        # NULL — coerce to False so the response model doesn't 500.
+        if value is None:
+            return False
+        return bool(value)
 
 
 class GoalCreate(GoalBase):

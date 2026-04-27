@@ -415,15 +415,17 @@ def update_goal(db: Session, goal_id: int, data: schemas.GoalUpdate):
 
 
 def list_goals(db: Session):
-    return (
-        db.query(models.Goal)
-        .order_by(
-            models.Goal.achieved.asc(),
-            models.Goal.target_date.asc().nullslast(),
-            models.Goal.created_at.desc(),
+    rows = db.query(models.Goal).all()
+    # Sort in Python to sidestep MySQL's lack of NULLS LAST for date columns.
+    # Order: pending first → earliest target date → most-recent created.
+    rows.sort(
+        key=lambda g: (
+            bool(g.achieved),
+            g.target_date or date.max,
+            -(g.id or 0),
         )
-        .all()
     )
+    return rows
 
 
 def delete_goal(db: Session, goal_id: int):

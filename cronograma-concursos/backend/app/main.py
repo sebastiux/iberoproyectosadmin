@@ -123,6 +123,14 @@ def create_goal(payload: schemas.GoalCreate, db: Session = Depends(get_db)):
     return crud.create_goal(db, payload)
 
 
+@app.patch("/goals/{goal_id}", response_model=schemas.GoalOut, tags=["goals"])
+def update_goal(goal_id: int, payload: schemas.GoalUpdate, db: Session = Depends(get_db)):
+    g = crud.update_goal(db, goal_id, payload)
+    if not g:
+        raise HTTPException(404, "Meta no encontrada")
+    return g
+
+
 @app.delete("/goals/{goal_id}", status_code=204, tags=["goals"])
 def delete_goal(goal_id: int, db: Session = Depends(get_db)):
     if not crud.delete_goal(db, goal_id):

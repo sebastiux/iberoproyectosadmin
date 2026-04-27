@@ -38,6 +38,15 @@ def tasks_this_week(db: Session = Depends(get_db)):
     return crud.tasks_pending_this_week(db)
 
 
+@router.get("/upcoming", response_model=List[schemas.WeekGroup])
+def upcoming_tasks(
+    days: int = Query(default=60, ge=1, le=365),
+    limit: int = Query(default=30, ge=1, le=200),
+    db: Session = Depends(get_db),
+):
+    return crud.upcoming_milestones(db, days=days, limit=limit)
+
+
 @router.get("/weekly-plan", response_model=schemas.WeeklyPlan)
 def weekly_plan(
     week_start: Optional[date] = Query(default=None),

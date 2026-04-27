@@ -167,6 +167,49 @@ def delete_task(db: Session, task_id: int):
     return True
 
 
+def upcoming_milestones(db: Session, days: int = 60, limit: int = 30) -> List[schemas.WeekGroup]:
+    """Incomplete tasks ending within the next `days` days, grouped by
+    project. Used by the Punto de Partida look-ahead.
+    """
+    today = date.today()
+    horizon = today + timedelta(days=days)
+    tasks = (
+        db.query(models.Task)
+        .join(models.Project)
+        .filter(models.Task.complete.is_(False))
+        .filter(models.Task.end_date.isnot(None))
+        .filter(models.Task.end_date >= today)
+        .filter(models.Task.end_date <= horizon)
+        .order_by(models.Project.name, models.Task.end_date)
+        .all()
+    )
+
+    groups: dict[int, schemas.WeekGroup] = {}
+    for t in tasks:
+        g = groups.get(t.project_id)
+        if g is None:
+            g = schemas.WeekGroup(
+                project_id=t.project_id,
+                project_name=t.project.name,
+                week_start=today,
+                week_end=horizon,
+                tasks=[],
+            )
+            groups[t.project_id] = g
+        g.tasks.append(schemas.TaskOut.model_validate(t))
+
+    # Trim oversized groups to keep the look-ahead readable.
+    out: list[schemas.WeekGroup] = []
+    remaining = limit
+    for g in groups.values():
+        if remaining <= 0:
+            break
+        g.tasks = g.tasks[:remaining]
+        remaining -= len(g.tasks)
+        out.append(g)
+    return out
+
+
 def tasks_pending_this_week(db: Session) -> List[schemas.WeekGroup]:
     """Incomplete tasks whose end_date falls within the current ISO week
     (Mon→Sun), grouped by project and ordered by due date.
@@ -355,8 +398,32 @@ def create_goal(db: Session, goal: schemas.GoalCreate):
     return db_goal
 
 
+def get_goal(db: Session, goal_id: int):
+    return db.query(models.Goal).filter(models.Goal.id == goal_id).first()
+
+
+def update_goal(db: Session, goal_id: int, data: schemas.GoalUpdate):
+    db_goal = get_goal(db, goal_id)
+    if not db_goal:
+        return None
+    for k, v in data.model_dump(exclude_unset=True).items():
+        setattr(db_goal, k, v)
+    db.commit()
+    db.refresh(db_goal)
+    logger.info("goal.update id=%s", goal_id)
+    return db_goal
+
+
 def list_goals(db: Session):
-    return db.query(models.Goal).order_by(models.Goal.target_date.asc().nullslast()).all()
+    return (
+        db.query(models.Goal)
+        .order_by(
+            models.Goal.achieved.asc(),
+            models.Goal.target_date.asc().nullslast(),
+            models.Goal.created_at.desc(),
+        )
+        .all()
+    )
 
 
 def delete_goal(db: Session, goal_id: int):

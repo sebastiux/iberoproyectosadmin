@@ -122,6 +122,14 @@ class GoalCreate(GoalBase):
     pass
 
 
+class GoalUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    target_date: Optional[date] = None
+    project_id: Optional[int] = None
+    achieved: Optional[bool] = None
+
+
 class GoalOut(GoalBase):
     id: int
     created_at: datetime

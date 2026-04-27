@@ -8,12 +8,17 @@ import {
   STATUS_COLORS,
   STATUS_LABELS,
   Task,
-  WeekGroup,
 } from "@/types";
-import { ChevronRightIcon, RefreshIcon } from "@/components/icons";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  RefreshIcon,
+} from "@/components/icons";
 import { WeeklyPlanSection } from "@/components/WeeklyPlanSection";
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+
+const PAGE_SIZE = 6;
 
 export default function Dashboard() {
   const qc = useQueryClient();
@@ -28,39 +33,38 @@ export default function Dashboard() {
     queryFn: async () => (await api.get("/tasks/priority?limit=8")).data,
   });
 
-  const { data: weekGroups = [] } = useQuery<WeekGroup[]>({
-    queryKey: ["week"],
-    queryFn: async () => (await api.get("/tasks/week")).data,
-  });
-
   const recalcMut = useMutation({
     mutationFn: async () =>
       (await api.post<RecalculateResult>("/tasks/recalculate-status")).data,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["summary"] });
       qc.invalidateQueries({ queryKey: ["priority"] });
-      qc.invalidateQueries({ queryKey: ["week"] });
       qc.invalidateQueries({ queryKey: ["weekly-plan"] });
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: ["project"] });
     },
   });
 
-  // Cover every concurso, even those with zero pending tasks this week.
-  const weekByProject = useMemo(() => {
-    const map = new Map<number, WeekGroup>();
-    for (const g of weekGroups) map.set(g.project_id, g);
-    return map;
-  }, [weekGroups]);
-  const weekRange = weekGroups[0]
-    ? `${fmtShort(weekGroups[0].week_start)} – ${fmtShort(weekGroups[0].week_end)}`
-    : null;
-  const weekTaskCount = weekGroups.reduce((a, g) => a + g.tasks.length, 0);
-
   const totalProjects = summaries.length;
   const totalCompleted = summaries.reduce((a, s) => a + s.completed_tasks, 0);
   const totalDelayed = summaries.reduce((a, s) => a + s.delayed_tasks, 0);
   const totalInProgress = summaries.reduce((a, s) => a + s.in_progress_tasks, 0);
+
+  // Sort: atrasadas first, then by least-progressed, so the monitor surfaces
+  // the concursos that need attention up top.
+  const ordered = useMemo(() => {
+    return [...summaries].sort((a, b) => {
+      if (b.delayed_tasks !== a.delayed_tasks) return b.delayed_tasks - a.delayed_tasks;
+      if (a.completion_percent !== b.completion_percent)
+        return a.completion_percent - b.completion_percent;
+      return a.name.localeCompare(b.name);
+    });
+  }, [summaries]);
+
+  const [page, setPage] = useState(0);
+  const totalPages = Math.max(1, Math.ceil(ordered.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages - 1);
+  const visible = ordered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE);
 
   return (
     <div className="space-y-12">
@@ -128,129 +132,135 @@ export default function Dashboard() {
       <WeeklyPlanSection />
 
       <section className="space-y-4">
-        <div className="flex items-baseline justify-between gap-4">
-          <h2 className="font-serif text-2xl">Pendientes esta semana</h2>
-          {weekRange && (
-            <span className="text-xs text-muted">
-              {weekRange} · {weekTaskCount} {weekTaskCount === 1 ? "tarea" : "tareas"}
-            </span>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-serif text-2xl">Avances por concurso</h2>
+            <p className="text-xs text-muted mt-0.5">
+              Monitor general · ordenados por atención requerida.
+            </p>
+          </div>
+          {ordered.length > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted mx-1">
+                {safePage * PAGE_SIZE + 1}–
+                {Math.min(ordered.length, (safePage + 1) * PAGE_SIZE)} de{" "}
+                {ordered.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="p-2 border border-border bg-card hover:border-foreground disabled:opacity-40 disabled:hover:border-border transition-colors"
+                aria-label="Página anterior"
+              >
+                <ChevronLeftIcon size={14} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="p-2 border border-border bg-card hover:border-foreground disabled:opacity-40 disabled:hover:border-border transition-colors"
+                aria-label="Página siguiente"
+              >
+                <ChevronRightIcon size={14} />
+              </button>
+            </div>
           )}
         </div>
-        {summaries.length === 0 ? (
+
+        {ordered.length === 0 ? (
           <div className="bg-card border border-border-soft p-6 text-sm text-muted">
             Aún no hay concursos.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {summaries.map((s) => {
-              const tasks = weekByProject.get(s.id)?.tasks ?? [];
-              return (
-                <article
-                  key={s.id}
-                  className="bg-card border border-border-soft p-5"
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <Link
-                      href={`/projects/${s.id}`}
-                      className="font-serif text-xl hover:underline"
-                    >
-                      {s.name}
-                    </Link>
-                    <span className="text-xs text-muted">
-                      {tasks.length} {tasks.length === 1 ? "tarea" : "tareas"}
-                    </span>
-                  </div>
-                  {tasks.length === 0 ? (
-                    <p className="mt-3 text-xs text-muted italic">
-                      Sin tareas pendientes esta semana.
-                    </p>
-                  ) : (
-                    <ul className="mt-3 divide-y divide-border-soft">
-                      {tasks.map((t) => (
-                        <li
-                          key={t.id}
-                          className="py-2.5 flex items-center justify-between gap-3 text-sm"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate">{t.name}</p>
-                            <p className="text-[11px] text-muted mt-0.5">
-                              Fin: {t.end_date}
-                              <span className="mx-1.5">·</span>
-                              {t.responsible ?? "Sin responsable"}
-                            </p>
-                          </div>
-                          <span
-                            className={`shrink-0 text-[11px] px-2 py-0.5 rounded border ${STATUS_COLORS[t.effective_status]}`}
-                          >
-                            {STATUS_LABELS[t.effective_status]}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </article>
-              );
-            })}
+            {visible.map((s) => (
+              <ProjectMonitorCard key={s.id} summary={s} />
+            ))}
           </div>
         )}
-      </section>
-
-      <section className="space-y-4">
-        <h2 className="font-serif text-2xl">Progreso por concurso</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {summaries.map((s) => (
-            <Link
-              key={s.id}
-              href={`/projects/${s.id}`}
-              className="group bg-card border border-border-soft hover:border-border transition-colors p-5"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="font-serif text-xl">{s.name}</h3>
-                <ChevronRightIcon
-                  size={18}
-                  className="text-muted group-hover:text-foreground transition-colors"
-                />
-              </div>
-              <div className="mt-4 h-[3px] bg-border-soft overflow-hidden">
-                <div
-                  className="h-full bg-foreground"
-                  style={{ width: `${s.completion_percent}%` }}
-                />
-              </div>
-              <div className="mt-3 flex items-center gap-2 text-xs text-muted">
-                <span>
-                  {s.completed_tasks}/{s.total_tasks} tareas
-                </span>
-                <span>·</span>
-                <span>{s.completion_percent}%</span>
-                {s.delayed_tasks > 0 && (
-                  <>
-                    <span>·</span>
-                    <span className="text-danger">{s.delayed_tasks} atrasadas</span>
-                  </>
-                )}
-              </div>
-            </Link>
-          ))}
-          {summaries.length === 0 && (
-            <p className="text-sm text-muted col-span-2">
-              Aún no hay concursos. Crea uno desde la sección Proyectos.
-            </p>
-          )}
-        </div>
       </section>
     </div>
   );
 }
 
-const MONTHS_ES = [
-  "ene", "feb", "mar", "abr", "may", "jun",
-  "jul", "ago", "sep", "oct", "nov", "dic",
-];
+function ProjectMonitorCard({ summary }: { summary: ProjectSummary }) {
+  const remaining = summary.total_tasks - summary.completed_tasks;
+  const showAccent = summary.delayed_tasks > 0;
 
-function fmtShort(iso: string): string {
-  const [, m, d] = iso.split("-").map(Number);
-  return `${d} ${MONTHS_ES[m - 1]}`;
+  return (
+    <Link
+      href={`/projects/${summary.id}`}
+      className="group bg-card border border-border-soft hover:border-foreground transition-colors p-5 flex flex-col"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="font-serif text-xl truncate">{summary.name}</h3>
+          {summary.contact_name && (
+            <p className="text-xs text-muted mt-0.5 truncate">
+              {summary.contact_name}
+            </p>
+          )}
+        </div>
+        <ChevronRightIcon
+          size={20}
+          className="shrink-0 text-muted group-hover:text-foreground transition-transform group-hover:translate-x-0.5 mt-1"
+        />
+      </div>
+
+      <div className="mt-4 flex items-baseline justify-between text-xs text-muted">
+        <span>
+          {summary.completed_tasks}/{summary.total_tasks} tareas
+        </span>
+        <span className={`font-medium ${showAccent ? "text-danger" : "text-foreground"}`}>
+          {summary.completion_percent}%
+        </span>
+      </div>
+      <div className="mt-1.5 h-[3px] bg-border-soft overflow-hidden">
+        <div
+          className={`h-full ${showAccent ? "bg-danger" : "bg-foreground"}`}
+          style={{ width: `${summary.completion_percent}%` }}
+        />
+      </div>
+
+      <div className="mt-4 grid grid-cols-3 gap-2 text-[11px]">
+        <Stat
+          label="En proceso"
+          value={summary.in_progress_tasks}
+          tone={summary.in_progress_tasks > 0 ? "amber" : "muted"}
+        />
+        <Stat
+          label="Atrasadas"
+          value={summary.delayed_tasks}
+          tone={summary.delayed_tasks > 0 ? "red" : "muted"}
+        />
+        <Stat label="Pendientes" value={remaining} tone="muted" />
+      </div>
+    </Link>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone: "muted" | "amber" | "red";
+}) {
+  const toneClass =
+    tone === "red"
+      ? "border-red-300 bg-red-50 text-red-900"
+      : tone === "amber"
+        ? "border-amber-300 bg-amber-50 text-amber-900"
+        : "border-border-soft bg-background text-muted";
+  return (
+    <div className={`border ${toneClass} px-2 py-1.5`}>
+      <p className="kicker text-[9px] tracking-[0.18em]">{label}</p>
+      <p className="text-base font-medium leading-tight mt-0.5">{value}</p>
+    </div>
+  );
 }
 
 function Metric({

@@ -57,7 +57,10 @@ export interface RecalculateResult {
 
 export interface ImportExcelResult {
   projects_created: number;
+  projects_updated: number;
   tasks_created: number;
+  tasks_updated: number;
+  tasks_deleted: number;
   skipped_rows: number;
   errors: string[];
 }

@@ -16,7 +16,10 @@ export default function ProjectsPage() {
   const qc = useQueryClient();
   const [form, setForm] = useState({ name: "", contact_name: "", description: "" });
   const [showForm, setShowForm] = useState(true);
+  const [replaceTasks, setReplaceTasks] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const templateUrl = `${api.defaults.baseURL ?? ""}/projects/import-excel/template`;
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -41,9 +44,10 @@ export default function ProjectsPage() {
   });
 
   const importMut = useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, replace }: { file: File; replace: boolean }) => {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("replace_tasks", replace ? "true" : "false");
       const res = await api.post<ImportExcelResult>(
         "/projects/import-excel",
         formData,
@@ -78,23 +82,39 @@ export default function ProjectsPage() {
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) importMut.mutate(file);
+              if (file) importMut.mutate({ file, replace: replaceTasks });
               e.target.value = "";
             }}
           />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={importMut.isPending}
-            className="flex items-center gap-2 border border-border bg-card hover:border-foreground px-4 py-2.5 text-sm transition-colors disabled:opacity-50"
-          >
-            <UploadIcon size={15} />
-            {importMut.isPending ? "Importando..." : "Importar desde Excel"}
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href={templateUrl}
+              className="flex items-center gap-2 border border-border-soft bg-card hover:border-foreground px-4 py-2.5 text-sm transition-colors"
+            >
+              Descargar plantilla
+            </a>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importMut.isPending}
+              className="flex items-center gap-2 border border-border bg-card hover:border-foreground px-4 py-2.5 text-sm transition-colors disabled:opacity-50"
+            >
+              <UploadIcon size={15} />
+              {importMut.isPending ? "Importando..." : "Importar desde Excel"}
+            </button>
+          </div>
+          <label className="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={replaceTasks}
+              onChange={(e) => setReplaceTasks(e.target.checked)}
+              className="accent-foreground"
+            />
+            Reemplazar tareas existentes en estos concursos
+          </label>
           {importMut.isSuccess && (
-            <span className="text-xs text-muted">
-              {importMut.data.projects_created} concursos · {importMut.data.tasks_created} tareas
-              {importMut.data.skipped_rows > 0 && ` · ${importMut.data.skipped_rows} omitidas`}
+            <span className="text-xs text-muted text-right">
+              {formatImportSummary(importMut.data)}
             </span>
           )}
           {importMut.isError && (
@@ -200,6 +220,17 @@ export default function ProjectsPage() {
       </section>
     </div>
   );
+}
+
+function formatImportSummary(r: ImportExcelResult): string {
+  const parts: string[] = [];
+  if (r.projects_created) parts.push(`${r.projects_created} concursos nuevos`);
+  if (r.projects_updated) parts.push(`${r.projects_updated} concursos actualizados`);
+  if (r.tasks_created) parts.push(`${r.tasks_created} tareas nuevas`);
+  if (r.tasks_updated) parts.push(`${r.tasks_updated} tareas actualizadas`);
+  if (r.tasks_deleted) parts.push(`${r.tasks_deleted} tareas eliminadas`);
+  if (r.skipped_rows) parts.push(`${r.skipped_rows} filas omitidas`);
+  return parts.length ? parts.join(" · ") : "Sin cambios";
 }
 
 function TextInput({

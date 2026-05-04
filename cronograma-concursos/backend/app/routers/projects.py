@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import List
 
 from .. import crud, schemas
 from ..database import get_db
-from ..excel_import import import_workbook
+from ..excel_import import generate_template, import_workbook
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -19,15 +20,28 @@ def projects_summary(db: Session = Depends(get_db)):
     return crud.projects_summary(db)
 
 
+@router.get("/import-excel/template")
+def download_import_template():
+    blob = generate_template()
+    return Response(
+        content=blob,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="plantilla-concursos.xlsx"'
+        },
+    )
+
+
 @router.post("/import-excel", response_model=schemas.ImportExcelResult)
 async def import_projects_excel(
     file: UploadFile = File(...),
+    replace_tasks: bool = Form(False),
     db: Session = Depends(get_db),
 ):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
         raise HTTPException(400, "Se requiere un archivo .xlsx")
     contents = await file.read()
-    return import_workbook(db, contents)
+    return import_workbook(db, contents, replace_tasks=replace_tasks)
 
 
 @router.get("/{project_id}", response_model=schemas.ProjectOut)

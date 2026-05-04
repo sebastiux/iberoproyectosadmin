@@ -152,7 +152,10 @@ class RecalculateResult(BaseModel):
 
 class ImportExcelResult(BaseModel):
     projects_created: int
+    projects_updated: int = 0
     tasks_created: int
+    tasks_updated: int = 0
+    tasks_deleted: int = 0
     skipped_rows: int
     errors: List[str] = []
 

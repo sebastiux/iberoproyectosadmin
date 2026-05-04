@@ -18,7 +18,6 @@ type TaskForm = {
   name: string;
   start_date: string;
   end_date: string;
-  responsible: string;
   observations: string;
   complete: boolean;
 };
@@ -27,7 +26,6 @@ const EMPTY_TASK: TaskForm = {
   name: "",
   start_date: "",
   end_date: "",
-  responsible: "",
   observations: "",
   complete: false,
 };
@@ -59,18 +57,12 @@ export default function ProjectDetailPage() {
     queryFn: async () => (await api.get("/tasks/step-suggestions")).data,
   });
 
-  const { data: responsibleSuggestions = [] } = useQuery<string[]>({
-    queryKey: ["responsible-suggestions"],
-    queryFn: async () => (await api.get("/tasks/responsible-suggestions")).data,
-  });
-
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["project", projectId] });
     qc.invalidateQueries({ queryKey: ["projects"] });
     qc.invalidateQueries({ queryKey: ["summary"] });
     qc.invalidateQueries({ queryKey: ["priority"] });
     qc.invalidateQueries({ queryKey: ["step-suggestions"] });
-    qc.invalidateQueries({ queryKey: ["responsible-suggestions"] });
   };
 
   const createTask = useMutation({
@@ -80,7 +72,6 @@ export default function ProjectDetailPage() {
         name: payload.name,
         start_date: payload.start_date || null,
         end_date: payload.end_date || null,
-        responsible: payload.responsible || null,
         observations: payload.observations || null,
         complete: payload.complete,
       };
@@ -148,11 +139,6 @@ export default function ProjectDetailPage() {
           <option key={s} value={s} />
         ))}
       </datalist>
-      <datalist id="responsible-suggestions">
-        {responsibleSuggestions.map((r) => (
-          <option key={r} value={r} />
-        ))}
-      </datalist>
 
       <header className="space-y-3">
         <Link
@@ -185,14 +171,12 @@ export default function ProjectDetailPage() {
               {project.tasks.length} {project.tasks.length === 1 ? "tarea" : "tareas"}
             </span>
           </LabeledInline>
-          <LabeledInline label="Descripción">
-            <HeaderEditable
+          <LabeledInline label="Ficha de proyecto">
+            <FichaUrl
               value={project.description ?? ""}
               onCommit={(v) =>
                 updateProject.mutate({ description: v.trim() === "" ? null : v.trim() })
               }
-              className="text-muted"
-              placeholder="Sin descripción"
             />
           </LabeledInline>
         </div>
@@ -267,34 +251,19 @@ export default function ProjectDetailPage() {
               </Field>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
-              <Field
-                label="Responsable"
-                hint="Empieza a escribir para reutilizar responsables existentes."
-              >
+            <Field label="Completo">
+              <label className="inline-flex items-center gap-2 px-3 py-2.5 text-sm text-foreground">
                 <input
-                  list="responsible-suggestions"
-                  className="w-full border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
-                  placeholder="Nombre del responsable"
-                  value={form.responsible}
-                  onChange={(e) => setForm({ ...form, responsible: e.target.value })}
-                  autoComplete="off"
+                  type="checkbox"
+                  checked={form.complete}
+                  onChange={(e) => setForm({ ...form, complete: e.target.checked })}
+                  className="accent-foreground"
                 />
-              </Field>
-              <Field label="Completo">
-                <label className="inline-flex items-center gap-2 px-3 py-2.5 text-sm text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={form.complete}
-                    onChange={(e) => setForm({ ...form, complete: e.target.checked })}
-                    className="accent-foreground"
-                  />
-                  Marcar como completada
-                </label>
-              </Field>
-            </div>
+                Marcar como completada
+              </label>
+            </Field>
 
-            <Field label="Observaciones">
+            <Field label="Notas">
               <textarea
                 rows={2}
                 className="w-full border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors"
@@ -327,7 +296,6 @@ export default function ProjectDetailPage() {
               <th className="text-left px-5 py-3 font-normal">Tarea</th>
               <th className="text-left px-5 py-3 font-normal">Inicio</th>
               <th className="text-left px-5 py-3 font-normal">Fin</th>
-              <th className="text-left px-5 py-3 font-normal">Responsable</th>
               <th className="text-left px-5 py-3 font-normal">Hecho</th>
               <th className="text-left px-5 py-3 font-normal">Estado</th>
               <th className="text-right px-5 py-3 font-normal"></th>
@@ -336,7 +304,7 @@ export default function ProjectDetailPage() {
           <tbody className="divide-y divide-border-soft">
             {project.tasks.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-8 text-center text-muted">
+                <td colSpan={6} className="px-5 py-8 text-center text-muted">
                   Aún no hay tareas en este concurso.
                 </td>
               </tr>
@@ -379,14 +347,6 @@ export default function ProjectDetailPage() {
                   />
                 </td>
                 <td className="px-5 py-3.5">
-                  <TextCell
-                    value={t.responsible}
-                    placeholder="—"
-                    list="responsible-suggestions"
-                    onCommit={(v) => patchTask(t.id, { responsible: v })}
-                  />
-                </td>
-                <td className="px-5 py-3.5">
                   <input
                     type="checkbox"
                     checked={t.complete}
@@ -421,42 +381,6 @@ export default function ProjectDetailPage() {
 }
 
 /* ------------------------------- inline cells ------------------------------ */
-
-function TextCell({
-  value,
-  placeholder,
-  list,
-  onCommit,
-}: {
-  value: string | null;
-  placeholder?: string;
-  list?: string;
-  onCommit: (v: string | null) => void;
-}) {
-  const [local, setLocal] = useState(value ?? "");
-  useEffect(() => setLocal(value ?? ""), [value]);
-
-  const commit = () => {
-    const next = local.trim() === "" ? null : local.trim();
-    const current = value ?? null;
-    if (next !== current) onCommit(next);
-  };
-
-  return (
-    <input
-      value={local}
-      placeholder={placeholder}
-      list={list}
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
-      }}
-      autoComplete="off"
-      className="w-full bg-transparent text-sm text-foreground placeholder:text-muted focus:outline-none focus:border-b focus:border-foreground -mx-1 px-1 py-0.5 rounded-sm"
-    />
-  );
-}
 
 function DateCell({
   value,
@@ -549,6 +473,64 @@ function HeaderEditable({
         }
       }}
       className={`w-full bg-transparent placeholder:text-muted focus:outline-none focus:border-b focus:border-foreground -mx-0.5 px-0.5 ${className}`}
+    />
+  );
+}
+
+function FichaUrl({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
+
+  const commit = () => {
+    if (local !== value) onCommit(local);
+    setEditing(false);
+  };
+
+  if (!editing && value) {
+    return (
+      <div className="flex items-center gap-3">
+        <a
+          href={value}
+          target="_blank"
+          rel="noreferrer"
+          className="text-foreground underline underline-offset-2 truncate"
+        >
+          {value}
+        </a>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="text-[11px] text-kicker hover:text-foreground transition-colors"
+        >
+          Editar
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <input
+      type="url"
+      autoFocus={editing}
+      value={local}
+      placeholder="https://..."
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        if (e.key === "Escape") {
+          setLocal(value);
+          setEditing(false);
+        }
+      }}
+      className="w-full bg-transparent text-muted placeholder:text-muted focus:outline-none focus:border-b focus:border-foreground focus:text-foreground -mx-0.5 px-0.5"
     />
   );
 }

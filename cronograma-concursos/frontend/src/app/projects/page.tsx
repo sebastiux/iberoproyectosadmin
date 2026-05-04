@@ -148,7 +148,7 @@ export default function ProjectsPage() {
                 onChange={(v) => setForm({ ...form, contact_name: v })}
               />
               <TextInput
-                placeholder="Descripción breve"
+                placeholder="Liga a ficha de proyecto (URL)"
                 value={form.description}
                 onChange={(v) => setForm({ ...form, description: v })}
               />

@@ -38,11 +38,33 @@ class Settings(BaseSettings):
     environment: str = Field(default="development")
     log_level: str = Field(default="INFO")
 
-    # Comma-separated user:password pairs, e.g. "carlos:secret,maria:other".
+    # Comma-separated entries. Each entry is "user:password" or
+    # "user:password:email". Email is required for the second login
+    # step (Resend OTP) and for receiving alerts/weekly reports.
     auth_users: str = Field(default="")
     # Random string used to sign session tokens. Must be set in production
     # so tokens survive restarts.
     auth_secret: str = Field(default="")
+
+    # Resend (https://resend.com) — optional. When the API key is missing,
+    # the email-confirmation step is skipped (login becomes single-step)
+    # and the scheduled alerts simply log instead of sending.
+    resend_api_key: str = Field(default="")
+    resend_from: str = Field(default="Cronograma <onboarding@resend.dev>")
+
+    # Where alerts and the Monday weekly report are sent. Comma-separated
+    # list of emails. If empty, falls back to every email configured in
+    # AUTH_USERS.
+    alert_recipients: str = Field(default="")
+
+    # Scheduler timezone + times (24h). Daily delay alert is sent at
+    # alert_daily_hour, weekly report is sent every Monday at
+    # weekly_report_hour, both in the configured timezone.
+    scheduler_timezone: str = Field(default="America/Mexico_City")
+    alert_daily_hour: int = Field(default=9)
+    weekly_report_hour: int = Field(default=8)
+    # Public URL of the frontend, embedded in email links.
+    public_app_url: str = Field(default="http://localhost:3000")
 
     model_config = SettingsConfigDict(
         env_file=".env",

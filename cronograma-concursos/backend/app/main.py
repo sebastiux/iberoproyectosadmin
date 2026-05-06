@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,11 +9,11 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 from typing import List
 
-from . import crud, schemas
+from . import crud, scheduler, schemas
 from .auth import current_user
 from .config import get_settings
 from .database import Base, engine, get_db
-from .routers import auth, projects, tasks
+from .routers import admin, auth, projects, tasks
 
 settings = get_settings()
 
@@ -31,7 +32,23 @@ try:
 except Exception:
     logger.exception("db.create_all failed")
 
-app = FastAPI(title="Cronograma Concursos API", version="0.2.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the alert scheduler when the app comes up; stop it on shutdown.
+    try:
+        scheduler.start()
+    except Exception:
+        logger.exception("scheduler.start failed")
+    try:
+        yield
+    finally:
+        try:
+            scheduler.shutdown()
+        except Exception:
+            logger.exception("scheduler.shutdown failed")
+
+
+app = FastAPI(title="Cronograma Concursos API", version="0.3.0", lifespan=lifespan)
 
 class ForceCORSHeaders(BaseHTTPMiddleware):
     """Belt-and-braces: attach permissive CORS headers to every response,
@@ -79,6 +96,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(tasks.router)
+app.include_router(admin.router)
 
 
 @app.exception_handler(Exception)

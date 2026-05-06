@@ -312,13 +312,14 @@ export default function ProjectDetailPage() {
               <th className="text-left px-5 py-3 font-normal">Fin</th>
               <th className="text-left px-5 py-3 font-normal">Hecho</th>
               <th className="text-left px-5 py-3 font-normal">Estado</th>
+              <th className="text-left px-5 py-3 font-normal">Notas</th>
               <th className="text-right px-5 py-3 font-normal"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border-soft">
             {project.tasks.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-center text-muted">
+                <td colSpan={7} className="px-5 py-8 text-center text-muted">
                   Aún no hay tareas en este concurso.
                 </td>
               </tr>
@@ -327,12 +328,6 @@ export default function ProjectDetailPage() {
               <tr key={t.id} className="align-top">
                 <td className="px-5 py-3.5">
                   <p>{t.name}</p>
-                  <NotesCell
-                    value={t.observations ?? ""}
-                    onCommit={(v) =>
-                      patchTask(t.id, { observations: v.trim() === "" ? null : v })
-                    }
-                  />
                 </td>
                 <td className="px-5 py-3.5 whitespace-nowrap">
                   <DateCell
@@ -375,6 +370,14 @@ export default function ProjectDetailPage() {
                 </td>
                 <td className="px-5 py-3.5">
                   <EstadoSelect task={t} onChange={(patch) => patchTask(t.id, patch)} />
+                </td>
+                <td className="px-5 py-3.5 min-w-[180px]">
+                  <NotesCell
+                    value={t.observations ?? ""}
+                    onCommit={(v) =>
+                      patchTask(t.id, { observations: v.trim() === "" ? null : v })
+                    }
+                  />
                 </td>
                 <td className="px-5 py-3.5 text-right">
                   <button
@@ -571,7 +574,7 @@ function NotesCell({
       onBlur={() => {
         if (local !== value) onCommit(local);
       }}
-      className="mt-1 w-full bg-transparent text-xs text-muted placeholder:text-muted/60 focus:text-foreground focus:outline-none resize-y -mx-1 px-1 py-0.5 focus:border-b focus:border-foreground"
+      className="w-full bg-transparent text-xs text-muted placeholder:text-muted/60 focus:text-foreground focus:outline-none resize-y -mx-1 px-1 py-0.5 focus:border-b focus:border-foreground"
     />
   );
 }

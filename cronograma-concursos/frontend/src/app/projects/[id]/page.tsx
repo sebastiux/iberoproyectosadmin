@@ -327,9 +327,12 @@ export default function ProjectDetailPage() {
               <tr key={t.id} className="align-top">
                 <td className="px-5 py-3.5">
                   <p>{t.name}</p>
-                  {t.observations && (
-                    <p className="mt-1 text-xs text-muted">{t.observations}</p>
-                  )}
+                  <NotesCell
+                    value={t.observations ?? ""}
+                    onCommit={(v) =>
+                      patchTask(t.id, { observations: v.trim() === "" ? null : v })
+                    }
+                  />
                 </td>
                 <td className="px-5 py-3.5 whitespace-nowrap">
                   <DateCell
@@ -545,6 +548,30 @@ function FichaUrl({
         }
       }}
       className="w-full bg-transparent text-muted placeholder:text-muted focus:outline-none focus:border-b focus:border-foreground focus:text-foreground -mx-0.5 px-0.5"
+    />
+  );
+}
+
+function NotesCell({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+}) {
+  const [local, setLocal] = useState(value);
+  useEffect(() => setLocal(value), [value]);
+
+  return (
+    <textarea
+      rows={1}
+      value={local}
+      placeholder="Agregar notas..."
+      onChange={(e) => setLocal(e.target.value)}
+      onBlur={() => {
+        if (local !== value) onCommit(local);
+      }}
+      className="mt-1 w-full bg-transparent text-xs text-muted placeholder:text-muted/60 focus:text-foreground focus:outline-none resize-y -mx-1 px-1 py-0.5 focus:border-b focus:border-foreground"
     />
   );
 }

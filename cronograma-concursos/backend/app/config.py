@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     environment: str = Field(default="development")
     log_level: str = Field(default="INFO")
 
+    # Comma-separated user:password pairs, e.g. "carlos:secret,maria:other".
+    auth_users: str = Field(default="")
+    # Random string used to sign session tokens. Must be set in production
+    # so tokens survive restarts.
+    auth_secret: str = Field(default="")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

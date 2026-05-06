@@ -9,9 +9,10 @@ from starlette.responses import Response
 from typing import List
 
 from . import crud, schemas
+from .auth import current_user
 from .config import get_settings
 from .database import Base, engine, get_db
-from .routers import projects, tasks
+from .routers import auth, projects, tasks
 
 settings = get_settings()
 
@@ -75,6 +76,7 @@ app.add_middleware(
     max_age=600,
 )
 
+app.include_router(auth.router)
 app.include_router(projects.router)
 app.include_router(tasks.router)
 
@@ -113,17 +115,17 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/goals", response_model=List[schemas.GoalOut], tags=["goals"])
+@app.get("/goals", response_model=List[schemas.GoalOut], tags=["goals"], dependencies=[Depends(current_user)])
 def list_goals(db: Session = Depends(get_db)):
     return crud.list_goals(db)
 
 
-@app.post("/goals", response_model=schemas.GoalOut, status_code=201, tags=["goals"])
+@app.post("/goals", response_model=schemas.GoalOut, status_code=201, tags=["goals"], dependencies=[Depends(current_user)])
 def create_goal(payload: schemas.GoalCreate, db: Session = Depends(get_db)):
     return crud.create_goal(db, payload)
 
 
-@app.patch("/goals/{goal_id}", response_model=schemas.GoalOut, tags=["goals"])
+@app.patch("/goals/{goal_id}", response_model=schemas.GoalOut, tags=["goals"], dependencies=[Depends(current_user)])
 def update_goal(goal_id: int, payload: schemas.GoalUpdate, db: Session = Depends(get_db)):
     g = crud.update_goal(db, goal_id, payload)
     if not g:
@@ -131,7 +133,7 @@ def update_goal(goal_id: int, payload: schemas.GoalUpdate, db: Session = Depends
     return g
 
 
-@app.delete("/goals/{goal_id}", status_code=204, tags=["goals"])
+@app.delete("/goals/{goal_id}", status_code=204, tags=["goals"], dependencies=[Depends(current_user)])
 def delete_goal(goal_id: int, db: Session = Depends(get_db)):
     if not crud.delete_goal(db, goal_id):
         raise HTTPException(404, "Meta no encontrada")

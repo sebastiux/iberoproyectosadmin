@@ -4,9 +4,14 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 
 from .. import crud, schemas
+from ..auth import current_user
 from ..database import get_db
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+router = APIRouter(
+    prefix="/tasks",
+    tags=["tasks"],
+    dependencies=[Depends(current_user)],
+)
 
 
 @router.get("/", response_model=List[schemas.TaskOut])

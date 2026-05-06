@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, API_BASE_URL } from "@/lib/api";
+import { api, downloadProtected } from "@/lib/api";
 import { ImportExcelResult, Project } from "@/types";
 import {
   ChevronRightIcon,
@@ -19,8 +19,13 @@ export default function ProjectsPage() {
   const [replaceTasks, setReplaceTasks] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const templateUrl = `${API_BASE_URL}/projects/import-excel/template`;
-  const exportUrl = `${API_BASE_URL}/projects/export-excel`;
+  const downloadTemplate = () =>
+    downloadProtected(
+      "/projects/import-excel/template",
+      "plantilla-concursos.xlsx",
+    );
+  const downloadCurrentData = () =>
+    downloadProtected("/projects/export-excel", "concursos-actuales.xlsx");
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -88,19 +93,21 @@ export default function ProjectsPage() {
             }}
           />
           <div className="flex items-center gap-2">
-            <a
-              href={templateUrl}
+            <button
+              type="button"
+              onClick={downloadTemplate}
               className="flex items-center gap-2 border border-border-soft bg-card hover:border-foreground px-4 py-2.5 text-sm transition-colors"
             >
               Descargar plantilla
-            </a>
-            <a
-              href={exportUrl}
+            </button>
+            <button
+              type="button"
+              onClick={downloadCurrentData}
               className="flex items-center gap-2 border border-border-soft bg-card hover:border-foreground px-4 py-2.5 text-sm transition-colors"
               title="Descarga todos los concursos y tareas con IDs ya llenados, listos para editar y volver a subir."
             >
               Descargar datos actuales
-            </a>
+            </button>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}

@@ -1,17 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+
+import { clearAuth, getUsername } from "@/lib/auth";
 
 const links = [
   { href: "/", label: "Cronograma Base" },
   { href: "/projects", label: "Proyectos" },
 ];
-
-// Until auth ships, we surface a single operator name. Swap this for the
-// logged-in user once login exists.
-const CURRENT_USER = "Carlos Ortega";
 
 const MONTHS_ES = [
   "ene", "feb", "mar", "abr", "may", "jun",
@@ -24,11 +22,23 @@ function formatToday() {
 }
 
 export function Navbar() {
+  const router = useRouter();
   const pathname = usePathname();
   const [today, setToday] = useState("");
+  const [user, setUser] = useState<string | null>(null);
 
-  // Format on the client to avoid hydration mismatches from timezone drift.
-  useEffect(() => setToday(formatToday()), []);
+  useEffect(() => {
+    setToday(formatToday());
+    const sync = () => setUser(getUsername());
+    sync();
+    window.addEventListener("auth-changed", sync);
+    return () => window.removeEventListener("auth-changed", sync);
+  }, []);
+
+  const handleLogout = () => {
+    clearAuth();
+    router.replace("/login");
+  };
 
   return (
     <nav className="border-b border-border-soft bg-background">
@@ -68,9 +78,20 @@ export function Navbar() {
           })}
         </div>
 
-        <div className="text-right shrink-0">
-          <p className="text-sm text-foreground">{CURRENT_USER}</p>
-          <p className="text-xs text-muted mt-0.5">{today || " "}</p>
+        <div className="text-right shrink-0 flex flex-col items-end">
+          <p className="text-sm text-foreground">{user || "—"}</p>
+          <div className="flex items-center gap-3 mt-0.5">
+            <p className="text-xs text-muted">{today || " "}</p>
+            {user && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="text-xs text-muted hover:text-foreground transition-colors underline underline-offset-2"
+              >
+                Salir
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </nav>

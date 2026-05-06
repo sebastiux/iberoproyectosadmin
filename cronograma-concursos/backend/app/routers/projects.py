@@ -4,10 +4,15 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from .. import crud, schemas
+from ..auth import current_user
 from ..database import get_db
 from ..excel_import import export_workbook, generate_template, import_workbook
 
-router = APIRouter(prefix="/projects", tags=["projects"])
+router = APIRouter(
+    prefix="/projects",
+    tags=["projects"],
+    dependencies=[Depends(current_user)],
+)
 
 
 @router.get("/", response_model=List[schemas.ProjectOut])

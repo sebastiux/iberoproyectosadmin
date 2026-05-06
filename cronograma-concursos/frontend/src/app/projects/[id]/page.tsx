@@ -111,7 +111,6 @@ export default function ProjectDetailPage() {
       name?: string;
       contact_name?: string | null;
       description?: string | null;
-      observations?: string | null;
     }) => (await api.patch(`/projects/${projectId}`, patch)).data,
     onSuccess: invalidate,
   });
@@ -185,16 +184,6 @@ export default function ProjectDetailPage() {
           </LabeledInline>
         </div>
       </header>
-
-      <section className="bg-card border border-border-soft p-6 space-y-3">
-        <p className="kicker">Observaciones</p>
-        <ObservationsField
-          value={project.observations ?? ""}
-          onCommit={(v) =>
-            updateProject.mutate({ observations: v.trim() === "" ? null : v })
-          }
-        />
-      </section>
 
       <section className="bg-card border border-border-soft p-6">
         <button
@@ -575,30 +564,6 @@ function NotesCell({
         if (local !== value) onCommit(local);
       }}
       className="w-full bg-transparent text-xs text-muted placeholder:text-muted/60 focus:text-foreground focus:outline-none resize-y -mx-1 px-1 py-0.5 focus:border-b focus:border-foreground"
-    />
-  );
-}
-
-function ObservationsField({
-  value,
-  onCommit,
-}: {
-  value: string;
-  onCommit: (v: string) => void;
-}) {
-  const [local, setLocal] = useState(value);
-  useEffect(() => setLocal(value), [value]);
-
-  return (
-    <textarea
-      rows={4}
-      value={local}
-      placeholder="Notas generales del concurso, pendientes, recordatorios..."
-      onChange={(e) => setLocal(e.target.value)}
-      onBlur={() => {
-        if (local !== value) onCommit(local);
-      }}
-      className="w-full border border-border bg-transparent px-3 py-2.5 text-sm placeholder:text-muted focus:outline-none focus:border-foreground transition-colors resize-y"
     />
   );
 }

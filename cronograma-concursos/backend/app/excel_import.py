@@ -46,6 +46,8 @@ logger = logging.getLogger(__name__)
 _EXCEL_EPOCH = date(1899, 12, 30)
 
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
+    "project_id": ("id concurso", "id de concurso", "concurso id", "id_concurso"),
+    "task_id": ("id tarea", "id de tarea", "tarea id", "id_tarea"),
     "project_name": ("concurso",),
     "name": ("secuencia / pasos", "secuencia/pasos", "secuencia", "pasos", "tarea"),
     "start_date": ("fecha de inicio", "inicio"),
@@ -65,6 +67,8 @@ _METADATA_LABELS: dict[str, str] = {
 }
 
 TEMPLATE_HEADERS: tuple[str, ...] = (
+    "ID Concurso",
+    "ID Tarea",
     "Concurso",
     "Secuencia / Pasos",
     "Fecha de inicio",
@@ -200,6 +204,19 @@ def _find_project_name(rows: list[tuple], header_idx: int, header_map: dict[str,
     return fallback
 
 
+def _find_project_id(rows: list[tuple], header_idx: int, header_map: dict[str, int]) -> int | None:
+    """First non-empty ID Concurso value in the data rows."""
+    cidx = header_map.get("project_id")
+    if cidx is None:
+        return None
+    for r in rows[header_idx + 1 :]:
+        if cidx < len(r):
+            value = _to_int(r[cidx])
+            if value is not None:
+                return value
+    return None
+
+
 def import_workbook(
     db: Session,
     file_bytes: bytes,
@@ -279,10 +296,33 @@ def _import_sheet(
         return
 
     project_name = _find_project_name(rows, header_idx, header_map, fallback=sheet_label)
+    project_id_hint = _find_project_id(rows, header_idx, header_map)
 
-    existing = db.query(models.Project).filter(models.Project.name == project_name).first()
+    # Match by ID when the sheet provides one (lets users rename a project
+    # without creating a duplicate). Fall back to exact name match.
+    existing = None
+    if project_id_hint is not None:
+        existing = (
+            db.query(models.Project)
+            .filter(models.Project.id == project_id_hint)
+            .first()
+        )
+        if existing is None:
+            counters.errors.append(
+                f"Hoja '{sheet_label}': ID de concurso {project_id_hint} no existe; se ignora la hoja."
+            )
+            return
+    if existing is None:
+        existing = (
+            db.query(models.Project)
+            .filter(models.Project.name == project_name)
+            .first()
+        )
+
     if existing:
         project = existing
+        if project.name != project_name:
+            project.name = project_name
         counters.projects_updated += 1
     else:
         project = models.Project(name=project_name)
@@ -305,13 +345,15 @@ def _import_sheet(
             return None
         return row[i]
 
-    # Build a name → existing Task index for upsert. After replace_tasks=True,
-    # this is empty. We also update it as we create rows so duplicates within
-    # the same sheet collapse to a single task.
+    # Build name- and id-based indexes for upsert. After replace_tasks=True,
+    # both are empty. We also update them as we create rows so duplicates
+    # within the same sheet collapse to a single task.
     existing_tasks: dict[str, models.Task] = {}
+    existing_tasks_by_id: dict[int, models.Task] = {}
     if not (replace_tasks and existing):
         for t in db.query(models.Task).filter(models.Task.project_id == project.id).all():
             existing_tasks[t.name.strip().lower()] = t
+            existing_tasks_by_id[t.id] = t
 
     order = (
         db.query(models.Task)
@@ -370,8 +412,23 @@ def _import_sheet(
             responsible = _clean_text(cell_for(row, "responsible"))
             observations = _clean_text(cell_for(row, "observations"))
 
+            # When replace_tasks=True we just deleted everything, so any task
+            # IDs the sheet carries are stale. Treat every row as a new task.
+            task_id_hint = (
+                None if replace_tasks else _to_int(cell_for(row, "task_id"))
+            )
             key = name.strip().lower()
-            existing_task = existing_tasks.get(key)
+            existing_task = None
+            if task_id_hint is not None:
+                existing_task = existing_tasks_by_id.get(task_id_hint)
+                if existing_task is None:
+                    counters.errors.append(
+                        f"'{project_name}' · '{name}': ID de tarea {task_id_hint} no existe en este concurso (omitida)."
+                    )
+                    counters.skipped_rows += 1
+                    continue
+            if existing_task is None:
+                existing_task = existing_tasks.get(key)
             if existing_task is not None:
                 # Upsert: update only fields the sheet actually carries, so
                 # blank cells don't wipe values the user edited in the app.
@@ -439,6 +496,8 @@ def generate_template() -> bytes:
         ("Renombra la pestaña con el nombre del concurso, o escríbelo en la celda B1.", None),
         ("", None),
         ("Columnas (fila 2):", bold),
+        ("  · ID Concurso           — opcional. Si lo llenas, se actualiza el concurso con ese ID (incluso renombrarlo). Déjalo vacío para crear uno nuevo.", None),
+        ("  · ID Tarea              — opcional. Llénalo para actualizar una tarea existente por ID; déjalo vacío para crearla o para hacer match por nombre.", None),
         ("  · Concurso              — opcional, repite el nombre del concurso.", None),
         ("  · Secuencia / Pasos     — nombre de la tarea (obligatorio).", None),
         ("  · Fecha de inicio       — formato YYYY-MM-DD o DD/MM/YYYY.", None),
@@ -451,12 +510,17 @@ def generate_template() -> bytes:
         ("  · Contacto              | Nombre del contacto", None),
         ("  · Ficha de proyecto     | https://...", None),
         ("", None),
-        ("Cómo se evitan duplicados:", bold),
-        ("  · Los concursos se identifican por nombre exacto.", None),
-        ("  · Las tareas se identifican por (Concurso, Secuencia / Pasos), sin distinguir mayúsculas.", None),
+        ("Cómo se hace match (orden de prioridad):", bold),
+        ("  · Concurso: por ID Concurso si lo llenas; si no, por nombre exacto.", None),
+        ("  · Tarea:    por ID Tarea si lo llenas; si no, por (Concurso, nombre de la tarea), sin distinguir mayúsculas.", None),
+        ("  · Si llenas ID Concurso y cambias el nombre, se renombra el concurso (no se duplica).", None),
         ("  · Re-subir el mismo archivo actualiza filas existentes; no las duplica.", None),
         ("  · Las celdas vacías no borran datos: sólo se actualiza lo que escribas en el archivo.", None),
-        ("  · Marca 'Reemplazar tareas existentes' al subir si quieres que el archivo sea la fuente de verdad y borre lo demás.", None),
+        ("", None),
+        ("Modos de carga:", bold),
+        ("  · Por defecto: agrega tareas nuevas y actualiza las existentes.", None),
+        ("  · Marca 'Reemplazar tareas existentes' para borrar todas las tareas previas del concurso y dejar sólo las del archivo.", None),
+        ("  · Para hacer una actualización masiva sobre tus datos actuales, usa 'Descargar datos actuales' en la página de Proyectos: trae los IDs ya llenos.", None),
     ]
     for idx, (text, font) in enumerate(lines, start=1):
         cell = instructions.cell(row=idx, column=1, value=text)
@@ -478,6 +542,8 @@ def generate_template() -> bytes:
 
     sample_rows = [
         (
+            None,  # ID Concurso (vacío = nuevo)
+            None,  # ID Tarea (vacío = nueva)
             "Mi Concurso 2026",
             "Alta de concurso en CRM",
             date(2026, 1, 15),
@@ -487,6 +553,8 @@ def generate_template() -> bytes:
             "Coordinar con marketing antes de publicar",
         ),
         (
+            None,
+            None,
             "Mi Concurso 2026",
             "Definir cronograma con cliente",
             date(2026, 1, 21),
@@ -496,6 +564,8 @@ def generate_template() -> bytes:
             "",
         ),
         (
+            None,
+            None,
             "Mi Concurso 2026",
             "Lanzamiento",
             date(2026, 2, 1),
@@ -508,14 +578,125 @@ def generate_template() -> bytes:
     for r in sample_rows:
         ws.append(r)
 
-    # Blank separator + metadata
+    # Blank separator + metadata. The labels live in the "Concurso" column
+    # (column 3 in this layout) so the importer's project_name parser picks
+    # them up correctly.
     ws.append([])
-    ws.append(["Contacto", "Juan Pérez"])
-    ws.append(["Ficha de proyecto", "https://drive.google.com/..."])
+    ws.append(["", "", "Contacto", "Juan Pérez"])
+    ws.append(["", "", "Ficha de proyecto", "https://drive.google.com/..."])
 
-    widths = (22, 34, 14, 14, 14, 12, 38)
+    widths = (12, 10, 22, 34, 14, 14, 14, 12, 38)
     for i, w in enumerate(widths, start=1):
         ws.column_dimensions[ws.cell(row=2, column=i).column_letter].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Snapshot export — current data with IDs prefilled, ready for bulk update
+# ---------------------------------------------------------------------------
+
+def export_workbook(db: Session) -> bytes:
+    """Dump every project + its tasks to an .xlsx with IDs pre-filled.
+
+    The resulting file is a valid input for `import_workbook`, so the typical
+    flow is: download → edit in Excel → re-upload to apply changes in bulk.
+    """
+    wb = Workbook()
+    instructions = wb.active
+    instructions.title = "Instrucciones"
+
+    bold = Font(bold=True)
+    title_font = Font(bold=True, size=14)
+    header_fill = PatternFill("solid", fgColor="EEEEEE")
+    id_fill = PatternFill("solid", fgColor="FFF7D6")  # amber tint on ID columns
+
+    intro = [
+        ("Snapshot de concursos para edición masiva", title_font),
+        ("", None),
+        ("Cada hoja corresponde a un concurso existente.", None),
+        ("Las columnas 'ID Concurso' e 'ID Tarea' vienen rellenadas: NO las modifiques.", None),
+        ("Edita los demás campos y vuelve a subir el archivo en 'Importar desde Excel'.", None),
+        ("", None),
+        ("Para crear un concurso o tarea nueva en este mismo archivo, deja vacías las celdas de ID.", None),
+        ("Para borrar todas las tareas previas y dejar sólo las del archivo,", None),
+        ("marca 'Reemplazar tareas existentes' al subir.", None),
+    ]
+    for idx, (text, font) in enumerate(intro, start=1):
+        cell = instructions.cell(row=idx, column=1, value=text)
+        if font:
+            cell.font = font
+    instructions.column_dimensions["A"].width = 100
+
+    projects = (
+        db.query(models.Project)
+        .order_by(models.Project.name.asc())
+        .all()
+    )
+
+    if not projects:
+        ws = wb.create_sheet("Sin concursos")
+        ws.cell(row=1, column=1, value="Aún no hay concursos en la base de datos.")
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
+
+    # Excel sheet titles cap at 31 chars and disallow some symbols.
+    used_titles: set[str] = set()
+
+    def _safe_title(name: str) -> str:
+        cleaned = "".join(c for c in name if c not in '[]:*?/\\').strip() or "Concurso"
+        base = cleaned[:31]
+        title = base
+        suffix = 2
+        while title in used_titles:
+            tail = f" ({suffix})"
+            title = base[: 31 - len(tail)] + tail
+            suffix += 1
+        used_titles.add(title)
+        return title
+
+    for project in projects:
+        ws = wb.create_sheet(_safe_title(project.name))
+        ws.cell(row=1, column=3, value=project.name).font = title_font
+
+        for i, h in enumerate(TEMPLATE_HEADERS, start=1):
+            c = ws.cell(row=2, column=i, value=h)
+            c.font = bold
+            c.fill = header_fill
+            c.alignment = Alignment(horizontal="left")
+        # Highlight the ID columns so users notice they're authoritative.
+        ws.cell(row=2, column=1).fill = id_fill
+        ws.cell(row=2, column=2).fill = id_fill
+
+        tasks = sorted(project.tasks, key=lambda t: (t.order or 0, t.id))
+        for t in tasks:
+            ws.append(
+                (
+                    project.id,
+                    t.id,
+                    project.name,
+                    t.name,
+                    t.start_date,
+                    t.end_date,
+                    t.duration_days,
+                    "sí" if t.complete else "",
+                    t.observations or "",
+                )
+            )
+            row = ws.max_row
+            ws.cell(row=row, column=1).fill = id_fill
+            ws.cell(row=row, column=2).fill = id_fill
+
+        ws.append([])
+        ws.append(["", "", "Contacto", project.contact_name or ""])
+        ws.append(["", "", "Ficha de proyecto", project.description or ""])
+
+        widths = (12, 10, 22, 34, 14, 14, 14, 12, 38)
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[ws.cell(row=2, column=i).column_letter].width = w
 
     buf = io.BytesIO()
     wb.save(buf)

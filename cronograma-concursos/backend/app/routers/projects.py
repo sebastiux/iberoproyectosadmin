@@ -5,7 +5,7 @@ from typing import List
 
 from .. import crud, schemas
 from ..database import get_db
-from ..excel_import import generate_template, import_workbook
+from ..excel_import import export_workbook, generate_template, import_workbook
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -28,6 +28,20 @@ def download_import_template():
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={
             "Content-Disposition": 'attachment; filename="plantilla-concursos.xlsx"'
+        },
+    )
+
+
+@router.get("/export-excel")
+def download_current_data(db: Session = Depends(get_db)):
+    """Snapshot of every project + tasks with IDs prefilled — ready for
+    bulk edit and re-upload via /import-excel."""
+    blob = export_workbook(db)
+    return Response(
+        content=blob,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="concursos-actuales.xlsx"'
         },
     )
 

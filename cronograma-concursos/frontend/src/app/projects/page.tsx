@@ -20,6 +20,7 @@ export default function ProjectsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const templateUrl = `${API_BASE_URL}/projects/import-excel/template`;
+  const exportUrl = `${API_BASE_URL}/projects/export-excel`;
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -93,6 +94,13 @@ export default function ProjectsPage() {
             >
               Descargar plantilla
             </a>
+            <a
+              href={exportUrl}
+              className="flex items-center gap-2 border border-border-soft bg-card hover:border-foreground px-4 py-2.5 text-sm transition-colors"
+              title="Descarga todos los concursos y tareas con IDs ya llenados, listos para editar y volver a subir."
+            >
+              Descargar datos actuales
+            </a>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -110,7 +118,7 @@ export default function ProjectsPage() {
               onChange={(e) => setReplaceTasks(e.target.checked)}
               className="accent-foreground"
             />
-            Reemplazar tareas existentes en estos concursos
+            Reemplazar tareas existentes (borra las anteriores antes de importar)
           </label>
           {importMut.isSuccess && (
             <span className="text-xs text-muted text-right">

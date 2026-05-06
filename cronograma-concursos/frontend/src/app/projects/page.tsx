@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api, API_BASE_URL } from "@/lib/api";
 import { ImportExcelResult, Project } from "@/types";
 import {
   ChevronRightIcon,
@@ -19,7 +19,7 @@ export default function ProjectsPage() {
   const [replaceTasks, setReplaceTasks] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const templateUrl = `${api.defaults.baseURL ?? ""}/projects/import-excel/template`;
+  const templateUrl = `${API_BASE_URL}/projects/import-excel/template`;
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ["projects"],
